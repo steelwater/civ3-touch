@@ -22,6 +22,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install native and Android prerequisites
         run: |
           sudo apt-get update
