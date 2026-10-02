@@ -1,0 +1,59 @@
+name: CI and Android APK
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-and-android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94.0
+        with:
+          components: rustfmt, clippy
+          targets: aarch64-linux-android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install native and Android prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y liblua5.4-dev pkg-config
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;27.2.12479018'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Test unchanged upstream baseline
+        working-directory: vendor/freec3
+        run: cargo test --locked -p fc3_core -p fc3_pcx -p fc3_flic -p fc3_headless
+      - name: Verify Civ3Touch
+        run: |
+          cargo fmt -p civ3touch-core --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo test --locked --workspace
+          python3 scripts/test_inventory.py
+          python3 scripts/check-source-policy.py
+          python3 scripts/verify-upstream.py
+      - name: Compile and lint Android
+        run: android/gradlew -p android --no-daemon assembleDebug lintDebug
+      - name: Package APK, corresponding source and checksums
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: bash scripts/package-ci-build.sh
+      - name: Upload verified development build
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: civ3-touch-debug-arm64-${{ github.sha }}
+          path: |
+            .local/ci-artifact/civ3-touch-debug-arm64.apk
+            .local/ci-artifact/civ3-touch-corresponding-source.tar.gz
+            .local/ci-artifact/SHA256SUMS
+            .local/ci-artifact/BUILD.txt
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30

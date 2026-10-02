@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "crates/fc3_core",
+    "crates/fc3_headless",
+    "crates/fc3_desktop",
+    "crates/fc3_pcx",
+    "crates/fc3_flic",
+]
+resolver = "2"

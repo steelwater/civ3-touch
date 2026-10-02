@@ -1,0 +1,18 @@
+[package]
+name = "fc3_desktop"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fc3_core = { path = "../fc3_core" }
+fc3_flic = { path = "../fc3_flic" }
+fc3_pcx = { path = "../fc3_pcx" }
+wgpu = "28.0"
+winit = "0.30"
+glyphon = "0.10"
+bytemuck = { version = "1.25", features = ["derive"] }
+pollster = "0.4"
+env_logger = "0.11"
+log = "0.4"
+rand = "0.8"
+rand_chacha = "0.3"

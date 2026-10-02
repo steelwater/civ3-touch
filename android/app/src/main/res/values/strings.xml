@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Civ3Touch M0</string>
+    <string name="running">Checking FreeC3 core…</string>
+    <string name="success">PASS — FreeC3 core\n\nLua rules loaded.\nWrong-player command rejected.\nTurn advanced to %1$d.\nSerialized replay matched.\n\nMilestone 0 technical spike</string>
+    <string name="failure">FAIL — FreeC3 core\n\n%1$s</string>
+</resources>

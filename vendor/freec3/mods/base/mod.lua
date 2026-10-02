@@ -1,0 +1,16 @@
+Mod = { name = "Civ3 Base Rules", version = "0.1.0" }
+
+require_mod_file("civilizations.lua")
+require_mod_file("units.lua")
+require_mod_file("techs.lua")
+require_mod_file("buildings.lua")
+require_mod_file("movement.lua")
+require_mod_file("turn.lua")
+require_mod_file("combat.lua")
+require_mod_file("city_names.lua")
+require_mod_file("actions.lua")
+require_mod_file("city.lua")
+require_mod_file("yields.lua")
+require_mod_file("growth.lua")
+require_mod_file("production.lua")
+require_mod_file("zoc.lua")

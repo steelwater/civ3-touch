@@ -1,0 +1,4 @@
+[workspace]
+members = ["crates/civ3touch-core"]
+exclude = ["vendor/freec3"]
+resolver = "2"

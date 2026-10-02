@@ -1,0 +1,2 @@
+-- City rules for the base mod
+-- (City founding validation moved to actions.lua via Action.define("build_city"))

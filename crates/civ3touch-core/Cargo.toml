@@ -1,0 +1,19 @@
+[package]
+name = "civ3touch-core"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fc3_core = { path = "../../vendor/freec3/crates/fc3_core" }
+fc3_pcx = { path = "../../vendor/freec3/crates/fc3_pcx" }
+fc3_flic = { path = "../../vendor/freec3/crates/fc3_flic" }
+# Enable static Lua for both host checks and Android, without changing upstream.
+mlua = { version = "0.10", features = ["lua54", "serialize", "vendored"] }
+serde_json = "1"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"

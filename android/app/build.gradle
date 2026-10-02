@@ -1,0 +1,25 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'org.civ3touch.spike'
+    buildFeatures { buildConfig true }
+    compileSdk 36
+    defaultConfig {
+        applicationId 'org.civ3touch.spike'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.1-m0'
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    sourceSets.main {
+        jniLibs.srcDirs = ['build/generated/jniLibs']
+        assets.srcDirs = ['../../vendor/freec3/mods']
+    }
+}
+
+tasks.register('buildRust', Exec) {
+    workingDir rootProject.projectDir.parentFile
+    commandLine 'bash', 'scripts/build-android-core.sh'
+}
+tasks.named('preBuild').configure { dependsOn 'buildRust' }

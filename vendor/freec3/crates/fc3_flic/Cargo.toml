@@ -1,0 +1,6 @@
+[package]
+name = "fc3_flic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
