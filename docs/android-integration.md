@@ -1,4 +1,15 @@
-# Android/Rust integration decision and architecture
+# Android/Rust integration
+
+## Milestone 1 extension (2026-10-05)
+
+Canonical [Milestone 1 brief](https://docs.google.com/document/d/1zmHPomRr53cus_xb0WnbSXfWid9S9STP8YGHWO4kGG0/edit). The existing Java/JNI spike is extended without new dependencies or vendor edits. `GameController` owns a single executor. Its Rust thread-local `Session` owns the engine and Lua; JNI exposes new-game, one-step movement, end-turn and close operations. There are no raw engine pointers or cross-thread engine transfers. JSON carries the upstream player view, immediate move options and command results to Java.
+
+`MapView` draws synthetic isometric terrain and the Settler marker, projects touch coordinates, and highlights native move options. Java owns selection/presentation only. Rust filters engine move options to paths containing exactly one step, then submits `MoveUnit`; it rejects invalid/stale/exhausted/distant requests without queuing a destination. End Turn issues available `SkipUnit` commands then `EndTurn`. The prototype has one player, so this advances directly to the next numbered turn. It does not implement victory/opponents.
+
+The Activity retains its controller across configuration changes using the platform retained-instance API. Pending work reports to the current Activity on the main thread. Finishing queues native cleanup on the same worker. There is no saved game or process-death restoration; reopening starts at New Game. This narrow lifecycle implementation uses the existing framework and does not adopt a new UI architecture.
+
+## Historical Milestone 0 decision
+
 
 Date: 2026-10-02. Owner: Dan. Approved choice: minimal Java/JNI spike with GPL-3.0. Context: prove FreeC3 can execute on Android before choosing a production renderer/UI architecture.
 

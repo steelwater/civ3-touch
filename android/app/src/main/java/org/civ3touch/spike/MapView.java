@@ -1,0 +1,130 @@
+package org.civ3touch.spike;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.view.MotionEvent;
+import android.view.View;
+
+/** Synthetic isometric tiles. Camera follows the unit; no proprietary artwork. */
+final class MapView extends View {
+    interface TileTap { void tap(int x, int y); }
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path diamond = new Path();
+    private final float halfWidth, halfHeight;
+    private TileTap onTap;
+    private GameState state;
+    private boolean selected;
+    private float downX, downY;
+
+    public MapView(Context context) {
+        super(context);
+        float density = getResources().getDisplayMetrics().density;
+        halfWidth = 48 * density;
+        halfHeight = 28 * density;
+        setClickable(true);
+        setFocusable(true);
+        setContentDescription("Generated map. Start a new game.");
+    }
+
+    void setOnTileTap(TileTap onTap) { this.onTap = onTap; }
+
+    void display(GameState next, boolean isSelected) {
+        state = next;
+        selected = isSelected;
+        if (state != null) setContentDescription("Generated map. " + state.name + " at " + state.x + ", " + state.y
+                + (selected ? ". Selected." : ". Tap the S marker to select."));
+        invalidate();
+    }
+
+    private float screenX(int x, int y) { return getWidth() / 2f + ((x - state.x) - (y - state.y)) * halfWidth; }
+    private float screenY(int x, int y) { return getHeight() / 2f + ((x - state.x) + (y - state.y)) * halfHeight; }
+
+    private void tile(Canvas canvas, int x, int y, int color, boolean stroke) {
+        float cx = screenX(x, y), cy = screenY(x, y);
+        diamond.reset();
+        diamond.moveTo(cx, cy - halfHeight);
+        diamond.lineTo(cx + halfWidth, cy);
+        diamond.lineTo(cx, cy + halfHeight);
+        diamond.lineTo(cx - halfWidth, cy);
+        diamond.close();
+        paint.setColor(color);
+        paint.setStyle(stroke ? Paint.Style.STROKE : Paint.Style.FILL);
+        paint.setStrokeWidth(2 * getResources().getDisplayMetrics().density);
+        canvas.drawPath(diamond, paint);
+        paint.setStyle(Paint.Style.FILL);
+    }
+
+    @Override protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        canvas.drawColor(Color.rgb(22, 32, 44));
+        if (state == null) return;
+        for (int y = 0; y < state.height; y++) {
+            for (int x = 0; x < state.width; x++) tile(canvas, x, y, Color.rgb(42, 52, 64), true);
+        }
+        for (GameState.Tile visible : state.tiles) {
+            tile(canvas, visible.x, visible.y, terrainColor(visible.terrain), false);
+            if (!"Visible".equals(visible.visibility)) tile(canvas, visible.x, visible.y, 0x77000000, false);
+            tile(canvas, visible.x, visible.y, 0xff263b35, true);
+            if (!"None".equals(visible.vegetation)) {
+                paint.setColor(0xff183e27);
+                paint.setTextAlign(Paint.Align.CENTER);
+                paint.setTextSize(halfHeight * .5f);
+                canvas.drawText("Forest".equals(visible.vegetation) ? "F" : "J", screenX(visible.x, visible.y), screenY(visible.x, visible.y) + halfHeight * .18f, paint);
+            }
+        }
+        if (selected) {
+            for (int[] destination : state.destinations) {
+                tile(canvas, destination[0], destination[1], 0xffffdd6b, true);
+                paint.setColor(0xffffdd6b);
+                canvas.drawCircle(screenX(destination[0], destination[1]), screenY(destination[0], destination[1]), halfHeight * .13f, paint);
+            }
+        }
+        float cx = screenX(state.x, state.y), cy = screenY(state.x, state.y);
+        paint.setColor(selected ? 0xffffdd6b : Color.WHITE);
+        canvas.drawCircle(cx, cy, halfHeight * .72f, paint);
+        paint.setColor(0xff24364a);
+        canvas.drawCircle(cx, cy, halfHeight * .57f, paint);
+        paint.setColor(Color.WHITE);
+        paint.setTextSize(halfHeight * .75f);
+        paint.setTextAlign(Paint.Align.CENTER);
+        canvas.drawText("S", cx, cy + halfHeight * .27f, paint);
+    }
+
+    @Override public boolean onTouchEvent(MotionEvent event) {
+        if (!isEnabled() || state == null) return false;
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            downX = event.getX(); downY = event.getY();
+            return true;
+        }
+        if (event.getAction() == MotionEvent.ACTION_UP) {
+            if (Math.hypot(event.getX() - downX, event.getY() - downY) > halfHeight / 2) return true;
+            performClick();
+            float dx = (event.getX() - getWidth() / 2f) / halfWidth;
+            float dy = (event.getY() - getHeight() / 2f) / halfHeight;
+            int x = Math.round(state.x + (dx + dy) / 2f);
+            int y = Math.round(state.y + (dy - dx) / 2f);
+            if (x >= 0 && y >= 0 && x < state.width && y < state.height) onTap.tap(x, y);
+            return true;
+        }
+        return true;
+    }
+    @Override public boolean performClick() { super.performClick(); return true; }
+
+    private static int terrainColor(String terrain) {
+        switch (terrain) {
+            case "Grassland": return 0xff6a9850;
+            case "Plains": return 0xffb3ad68;
+            case "Desert": return 0xffd5bc81;
+            case "Coast": return 0xff579da9;
+            case "Ocean": return 0xff366889;
+            case "Hill": return 0xff92885d;
+            case "Mountain": return 0xff929591;
+            case "Tundra": return 0xffabb7a0;
+            case "Ice": return 0xffd9e7e9;
+            default: throw new IllegalArgumentException("Unknown terrain: " + terrain);
+        }
+    }
+}

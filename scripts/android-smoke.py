@@ -16,7 +16,7 @@ def adb(*command):
 
 for missing in (False, True, False):
     adb('shell', 'am', 'force-stop', package)
-    adb('shell', 'am', 'start', '-W', '-n', package + '/.MainActivity', '--ez', 'missingRules', str(missing).lower())
+    adb('shell', 'am', 'start', '-W', '-n', package + '/.MainActivity', '--ez', 'smokeTest', 'true', '--ez', 'missingRules', str(missing).lower())
     pid = adb('shell', 'pidof', package).strip()
     expected = 'CORE_SMOKE_FAIL IllegalStateException' if missing else 'CORE_SMOKE_PASS turn=2'
     for _ in range(40):
