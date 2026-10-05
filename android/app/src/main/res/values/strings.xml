@@ -1,6 +1,12 @@
 <resources>
-    <string name="app_name">Civ3Touch M0</string>
-    <string name="running">Checking FreeC3 core…</string>
-    <string name="success">PASS — FreeC3 core\n\nLua rules loaded.\nWrong-player command rejected.\nTurn advanced to %1$d.\nSerialized replay matched.\n\nMilestone 0 technical spike</string>
-    <string name="failure">FAIL — FreeC3 core\n\n%1$s</string>
+    <string name="app_name">Civ3Touch</string>
+    <string name="new_game">New Game</string>
+    <string name="end_turn">End Turn</string>
+    <string name="working">Working…</string>
+    <string name="welcome">Milestone 1 prototype. Start a New Game.\nOne Settler, synthetic terrain, no saves.</string>
+    <string name="select_unit">Tap the S marker to select your Settler.</string>
+    <string name="selected">Settler selected at %1$d, %2$d. Movement: %3$.1f.</string>
+    <string name="choose_tile">Tap a gold tile to move.</string>
+    <string name="no_step">No step available. End Turn to refresh movement.</string>
+    <string name="game_status">Turn %1$d · %2$s\n%3$s End Turn skips unused movement.</string>
 </resources>

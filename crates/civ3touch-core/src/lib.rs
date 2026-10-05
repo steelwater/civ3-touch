@@ -1,4 +1,5 @@
-//! Milestone 0 proof boundary; no persistent game session or presentation code.
+//! Platform-independent FreeC3 smoke and interactive prototype boundaries.
+pub mod session;
 use fc3_core::engine::{Engine, GameConfig, GameLog};
 use fc3_core::protocol::{Command, Event, GameError};
 use fc3_core::types::PlayerId;
@@ -73,41 +74,7 @@ pub fn smoke_test(rules: &Path) -> Result<u32, String> {
 }
 
 #[cfg(target_os = "android")]
-mod android {
-    use jni::{
-        objects::{JClass, JString},
-        sys::jint,
-        JNIEnv,
-    };
-    use std::{
-        panic::{catch_unwind, AssertUnwindSafe},
-        path::Path,
-    };
-
-    /// Synchronous, scoped engine lifetime. No Rust engine crosses threads or JNI.
-    #[no_mangle]
-    pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_smokeTest(
-        mut env: JNIEnv,
-        _class: JClass,
-        rules: JString,
-    ) -> jint {
-        let outcome = catch_unwind(AssertUnwindSafe(|| {
-            let path: String = env.get_string(&rules).map_err(|e| e.to_string())?.into();
-            super::smoke_test(Path::new(&path))
-        }));
-        match outcome {
-            Ok(Ok(turn)) => turn as jint,
-            failure => {
-                let message = match failure {
-                    Ok(Err(message)) => message,
-                    _ => "Rust core panicked".into(),
-                };
-                let _ = env.throw_new("java/lang/IllegalStateException", message);
-                -1
-            }
-        }
-    }
-}
+mod android;
 
 #[cfg(test)]
 mod tests {

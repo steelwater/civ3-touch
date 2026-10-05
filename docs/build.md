@@ -53,4 +53,4 @@ Gradle runs `scripts/build-android-core.sh`, using the NDK's API-26 ARM64 clang 
 
 Fresh build proof without deleting prior Rust outputs: set `CARGO_TARGET_DIR="$PWD/.local/validation-target"`, then run the same commands. Gradle `clean assembleDebug lintDebug` rebuilds generated APK output.
 
-Run `adb devices -l`, choose an ARM64 serial, install the debug APK, then run `python3 scripts/android-smoke.py SERIAL`. That harness launches three scoped app instances: success, missing-rules failure, and recovery. It does not clear device logs or uninstall other apps.
+Run `adb devices -l`, choose an ARM64 serial, install the debug APK, then run `python3 scripts/android-acceptance.py SERIAL` for the Milestone 1 touch path. Also run `python3 scripts/android-smoke.py SERIAL`. That harness launches three scoped app instances: success, missing-rules failure, and recovery. It does not clear device logs or uninstall other apps.

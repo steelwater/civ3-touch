@@ -1,4 +1,32 @@
-# Milestone 0 verification and CI
+# Civ3Touch verification and CI
+
+## Milestone 1
+
+Use the environment in `build.md`, then run:
+
+```sh
+cargo fmt -p civ3touch-core --check
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
+python3 scripts/test_inventory.py
+python3 scripts/verify-upstream.py
+python3 scripts/check-source-policy.py
+android/gradlew -p android assembleDebug lintDebug
+adb -s YOUR_SERIAL install -r android/app/build/outputs/apk/debug/app-debug.apk
+python3 scripts/android-acceptance.py YOUR_SERIAL
+python3 scripts/android-smoke.py YOUR_SERIAL
+```
+
+The acceptance harness launches the installed app, taps New Game, selects the actual drawn Settler, submits a rejected distant move, moves one engine-advertised tile, and advances to turn 2. It checks UI descriptions/status and bounded native debug evidence, then tests reset, missing rules and recovery. It does not call a test-only gameplay shortcut. The old smoke harness uses a debug-only `smokeTest` launch extra. Proprietary data is never needed.
+
+Manual checks: verify selected/gold tile outlines and unit relocation, rotate during a game and confirm turn/position/selection survive, background/resume, retry after a missing-rules error, and inspect phone/tablet/landscape plus 1.5× text. Status text scrolls in a bounded panel. Device display settings must be restored after tests. Physical-device and accessibility completeness are separate limits, not inferred from an emulator pass.
+
+Current results and known limitations: [Milestone 1 record](milestone-1.md). The existing `core-and-android` CI job runs the expanded Rust tests and Android build/lint on PRs. Device acceptance is local; CI uses synthetic data only.
+
+Google's current [testing/testing-setup skill](https://github.com/android/skills/blob/main/testing/testing-setup/SKILL.md) informed the stack inspection, core behavior tests, real native/device acceptance, lifecycle and layout checks. This project uses platform Views/Canvas, Rust tests and an adb/UI Automator dump/input harness. No DI, Java mocking, database, coverage or screenshot framework is installed. Broad framework installation is excluded by the handbook's dependency/minimal-scope rules. Play, R8, performance and navigation skills are not material to this small existing-shell slice.
+
+## Historical Milestone 0 evidence
+
 
 The highest-risk seams are unchanged upstream behavior, Lua/native cross-compilation, JNI error handling, command/replay behavior, and metadata-only inspection of local game files.
 

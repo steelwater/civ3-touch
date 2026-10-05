@@ -21,7 +21,7 @@ Commit: $GITHUB_SHA
 Workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
 Built UTC: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Variant: debug; ABI: arm64-v8a; minimum API: 26
-This is a Milestone 0 feasibility app, not a playable game or production release.
+This is a Milestone 1 interactive map prototype, not a complete game or production release.
 The APK contains FreeC3 Lua rules, no proprietary Civilization III data.
 
 Corresponding source: civ3-touch-corresponding-source.tar.gz
