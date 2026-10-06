@@ -1,4 +1,5 @@
 //! Platform-independent FreeC3 smoke and interactive prototype boundaries.
+pub mod assets;
 pub mod session;
 use fc3_core::engine::{Engine, GameConfig, GameLog};
 use fc3_core::protocol::{Command, Event, GameError};
