@@ -195,6 +195,28 @@ mod tests {
         );
     }
     #[test]
+    fn new_game_restores_native_initial_facing_after_a_move() {
+        let mut game = session();
+        assert_eq!(
+            game.initial_snapshot()["view"]["known_units"][0]["direction"],
+            "SE"
+        );
+        let (id, destinations) = game.moves().remove(0);
+        let moved = game.move_unit(id, destinations[0]);
+        assert_eq!(moved["result"]["errors"], json!([]));
+        let native_direction = game.engine.player_view(PLAYER).known_units[0].direction;
+        assert_ne!(native_direction, fc3_core::types::Direction::SE);
+        assert_eq!(
+            moved["view"]["known_units"][0]["direction"],
+            json!(native_direction)
+        );
+        assert_eq!(
+            session().initial_snapshot()["view"]["known_units"][0]["direction"],
+            "SE"
+        );
+    }
+
+    #[test]
     fn end_turn_can_skip_unused_movement_and_new_game_resets_the_sandbox() {
         let mut game = session();
         assert_eq!(game.end_turn()["view"]["turn"], 2);

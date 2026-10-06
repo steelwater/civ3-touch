@@ -1,6 +1,7 @@
 package org.civ3touch.spike;
 
 import android.content.Context;
+import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -24,10 +25,50 @@ final class GameController {
     boolean busy, selected;
     String error = "";
     private boolean closed;
+    ImportedAssets assets;
+    String progress = "";
+    boolean audioEnabled, foreground;
+    final boolean prototype;
+    private final GameAudio audio = new GameAudio(message -> { error = message; notifyChanged(); });
 
-    GameController(Context context) { this.context = context.getApplicationContext(); }
+    GameController(Context context, boolean prototype) {
+        this.context = context.getApplicationContext();
+        this.prototype = prototype;
+        if (!prototype) loadImport(null);
+    }
+
+    void loadImport(Uri source) {
+        if (busy || closed) return;
+        busy = true; error = ""; progress = source == null ? "Checking imported data…" : "Checking source folder…";
+        notifyChanged();
+        worker.execute(() -> {
+            try {
+                AssetImporter importer = new AssetImporter(context);
+                ImportedAssets loaded = source == null ? importer.restore() : importer.importFolder(source, message -> main.post(() -> {
+                    if (!closed) { progress = message; notifyChanged(); }
+                }));
+                main.post(() -> {
+                    if (closed) return;
+                    assets = loaded; state = null; selected = false; busy = false;
+                    if (loaded != null) { error = loaded.warnings; audio.load(loaded); }
+                    notifyChanged();
+                });
+            } catch (Exception | LinkageError failure) {
+                main.post(() -> {
+                    if (closed) return;
+                    busy = false;
+                    error = "Import failed: " + failure.getMessage() + (assets == null ? "" : "\nPrevious import is still available.");
+                    notifyChanged();
+                });
+            }
+        });
+    }
+    void setForeground(boolean value) { foreground = value; updateAudio(); }
+    void toggleAudio() { audioEnabled = !audioEnabled; updateAudio(); notifyChanged(); }
+    private void updateAudio() { audio.setPlaying(foreground && audioEnabled && state != null); }
 
     void newGame(boolean missingRules) {
+        if (assets == null && !prototype) return;
         execute(() -> {
             File rules = new File(context.getFilesDir(), "base");
             copyRules(rules);
@@ -43,6 +84,7 @@ final class GameController {
     private void execute(NativeAction action, boolean resetSelection) {
         if (busy || closed) return;
         busy = true;
+        progress = context.getString(R.string.working);
         error = "";
         notifyChanged();
         worker.execute(() -> {
@@ -53,6 +95,7 @@ final class GameController {
                     // Bounded acceptance evidence: full terrain can exceed logcat's line limit.
                     JSONObject evidence = new JSONObject(json);
                     JSONObject view = evidence.getJSONObject("view");
+                    evidence.put("settler_atlas_column", next.facingColumn);
                     evidence.put("view", new JSONObject()
                             .put("turn", view.getInt("turn"))
                             .put("known_units", view.getJSONArray("known_units"))
@@ -61,7 +104,10 @@ final class GameController {
                 }
                 main.post(() -> {
                     if (closed) return;
+                    boolean moved = next.unitMoved;
                     state = next;
+                    updateAudio();
+                    if (moved) audio.step();
                     if (resetSelection) selected = false;
                     busy = false;
                     notifyChanged();
@@ -106,6 +152,7 @@ final class GameController {
     void notifyChanged() { if (listener != null) listener.changed(); }
     void close() {
         closed = true;
+        audio.close();
         listener = null;
         worker.execute(() -> {
             try { CoreBridge.close(); } catch (LinkageError ignored) { /* Library failed to load. */ }

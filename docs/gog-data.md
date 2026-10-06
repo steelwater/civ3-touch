@@ -1,5 +1,7 @@
 # GOG reference installation and minimum probe manifest
 
+Milestone 2 now defines the executable import profile and storage/rendering contract in [milestone-2.md](milestone-2.md). The original six-image probe below is historical: the active slice requires four atlases, Settler idle/run, GOG/version markers and optional selected audio.
+
 Reference input: `setup_civilization3_complete_2.0.0.7.exe`, 1,370,659,544 bytes; SHA-256 `4ad54ca308ea93af49b0db3a795736eda91aed61c8cd73b18196802d0f4d2395`.
 
 `innoextract` 1.9 identifies “Sid Meier's Civilization III Complete”, Inno Setup 5.5.0 (Unicode). Extracted GOG metadata reports game/root ID `1471405734`, English. `2.0.0.7` is the package filename identifier; no separate internal GOG build-number field was verified. The base `Text/version.txt` reports `1.29f`; do not mislabel that as the Conquests version.

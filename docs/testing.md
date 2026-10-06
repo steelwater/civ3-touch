@@ -1,5 +1,29 @@
 # Civ3Touch verification and CI
 
+## Milestone 2
+
+Run the same Rust, inventory, source-policy, vendor-hash and Android build/lint gates below. Fifteen Rust tests now include synthetic GOG detection, required/optional-file handling, case resolution/collisions, symlink rejection, INI path restrictions, bounded malformed PCX/FLC failures, direction/ring-frame atlas behavior and native-facing reset after movement. CI needs no game data.
+
+For developer-local real data and a disposable ARM64 API-36 test emulator:
+
+```sh
+cargo build --locked --bin validate_gog
+cargo run --locked --bin validate_gog -- local-data/gog/app
+adb -s YOUR_SERIAL install -r android/app/build/outputs/apk/debug/app-debug.apk
+python3 scripts/android-import-acceptance.py YOUR_SERIAL local-data/gog/app
+python3 scripts/android-acceptance.py YOUR_SERIAL --imported
+python3 scripts/android-acceptance.py YOUR_SERIAL
+python3 scripts/android-smoke.py YOUR_SERIAL
+```
+
+The import harness uses the actual system picker. It copies only profile files from the source into unique emulator `Documents/Civ3Touch-*` folders and tests valid, missing, unsupported and malformed variants, unchanged active data after failure, staging cleanup and process restart. **It replaces this app’s active import; use a disposable emulator, not an installation whose data you want to keep.** Input files stay untouched. Device test folders remain until the disposable session ends. The harness assumes an English phone-sized DocumentsUI with a Documents breadcrumb; it is not a portable test runner for every provider/locale. Do not upload game data or original-asset screenshots as test artifacts.
+
+`--imported` exercises touch selection, rejected distant moves, one valid move, end turn, reset, missing-rule diagnosis and recovery with installed original assets. It also checks native direction and Android's parsed atlas column on initial launch, after movement and after New Game. Without it, the existing harness explicitly uses a debug-only synthetic launch extra. Normal app launches never bypass import.
+
+Manual checks: cancel folder selection; verify clean launch gates Play; inspect original terrain and animated Settler; toggle audio, move and inspect debug `AUDIO_*` events for decoder readiness, music start/pause and successful sound stream; background/resume; rotate; inspect phone/tablet/landscape and 1.5× text. Verify retained game state and import progress after configuration changes. Restore emulator display/settings afterwards. Actual listening, physical-device/API-26 and alternative-provider testing must be reported separately.
+
+Current results and scoped limitations: [Milestone 2 record](milestone-2.md).
+
 ## Milestone 1
 
 Use the environment in `build.md`, then run:
@@ -73,7 +97,7 @@ Android lint reports zero errors and four warnings: newer Gradle available, no x
 
 `.github/workflows/ci.yml` provides one `core-and-android` job: install pinned prerequisites; test upstream core/decoders/headless; check own formatting, Clippy and tests; run synthetic path tests and source/baseline checks; compile and lint the Android app. It uses no GOG data. Desktop GUI compilation is observed locally; the CI job deliberately targets the Android/core seam.
 
-There is no configured remote or PR. Consequently GitHub Actions execution and required-check protection have **not** been verified. Local equivalents passed on macOS; the Ubuntu workflow itself remains unrun until an approved Uplink establishes a remote. Emulator smoke is presently a local/manual gate, not a claim of CI device coverage.
+The original Milestone 0 audit preceded remote setup. The current public repository and required `core-and-android` protection are documented in [github-actions.md](github-actions.md). Required checks must pass on each new PR head; earlier milestone evidence does not satisfy that gate. Emulator verification remains a local/manual gate, not CI device coverage.
 
 ## Skills and remaining limits
 

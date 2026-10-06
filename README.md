@@ -1,6 +1,6 @@
 # Civ3Touch
 
-An independent, open-source investigation of an Android client built around the FreeC3 simulation engine, using user-supplied GOG Civilization III Complete data. **Milestone 1 is a minimal interactive map prototype, not a complete game.**
+An independent, open-source investigation of an Android client built around the FreeC3 simulation engine, using user-supplied GOG Civilization III Complete data. **Milestone 2 imports a narrow set of user-supplied GOG assets for the existing map prototype; this is not a complete game.**
 
 Civ3Touch is not affiliated with or endorsed by Firaxis, 2K, GOG, FreeC3, or OpenCiv3/C7. Civilization III and related trademarks belong to their owners. No proprietary game data is included. Civ3Touch additions use GPL-3.0-only; see [LICENSE](LICENSE), [upstream attribution](UPSTREAM.md), and [licensing decision](docs/licensing.md).
 
@@ -19,9 +19,9 @@ python3 scripts/android-acceptance.py YOUR_DEVICE_SERIAL
 python3 scripts/android-smoke.py YOUR_DEVICE_SERIAL
 ```
 
-Launch → **New Game** → tap the **S** Settler marker → tap a gold adjacent tile → **End Turn**. The map follows the unit. The acceptance harness performs real touches and checks native state, rejected moves, reset, missing rules and recovery. The separate smoke harness retains Milestone 0 command/replay checks. Both require a debug APK and an ARM64 device/emulator; no game installation is needed.
+Launch → **Import Civilization III Complete** → select the copied English GOG installation root → wait for validation/import → **Play** → tap the Settler’s tile → tap a gold adjacent tile → **End Turn**. Copy the folder into a device folder such as `Documents/Civ3Complete`, including its GOG `.info` metadata. The picker cannot grant access to Android/data or the storage root on modern Android. The map follows the unit. The acceptance harness performs real touches and checks native state, rejected moves, reset, missing rules and recovery. The separate smoke harness retains Milestone 0 command/replay checks. Both existing harnesses require a debug APK and an ARM64 device/emulator; their explicit debug-only synthetic mode needs no game installation. Normal launches require import.
 
-The sandbox uses a fixed generated 16×16 map and one player/Settler. End Turn skips unused movement. Rotation retains the session; app exit or process death discards it. There is no import, save, opponent AI or original artwork. See [Milestone 1 evidence and limits](docs/milestone-1.md).
+The sandbox uses a fixed generated 16×16 map and one player/Settler. End Turn skips unused movement. Rotation retains the session; app exit or process death discards it. Five original base terrain types and the Settler idle/run animations are supported. Other terrain/vegetation retain prototype markers; terrain transitions are not reproduced. Optional movement WAV and one ancient-era MP3 can be enabled with **Audio off/on**. Audio stops in the background. There is no save or opponent AI. See [Milestone 2 import contract and evidence](docs/milestone-2.md).
 
 ## Project layout and continuation
 
@@ -32,7 +32,7 @@ The sandbox uses a fixed generated 16×16 map and one player/Settler. End Turn s
 - `docs/`: [build instructions](docs/build.md), [architecture/integration](docs/android-integration.md), [GOG inventory](docs/gog-data.md), [test/CI evidence](docs/testing.md), and [milestone audit](docs/milestone-0-audit.md).
 - `installer/`, `local-data/`, `.local/`, and build output: ignored local inputs and tools. See [asset policy](docs/asset-policy.md).
 
-Canonical scope: [Milestone 1 Crew Brief](https://docs.google.com/document/d/1zmHPomRr53cus_xb0WnbSXfWid9S9STP8YGHWO4kGG0/edit) and [roadmap](https://docs.google.com/document/d/149SobRRG_ZL3qq4fXuJ5KZG0R_l9vmf3NOmQ8W1TWlE/edit). Milestone 2 asset import requires a separate approved mission. Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
+Canonical scope: [Milestone 2 Crew Brief](https://docs.google.com/document/d/1KpGp8DkI_fEKqae-VUopcJPklU1XAOrtN4EnfugxyjM/edit) and [roadmap](https://docs.google.com/document/d/149SobRRG_ZL3qq4fXuJ5KZG0R_l9vmf3NOmQ8W1TWlE/edit). Milestone 3 gameplay expansion requires a separate approved mission. Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## GitHub builds
 
