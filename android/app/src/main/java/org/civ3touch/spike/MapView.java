@@ -53,7 +53,7 @@ final class MapView extends View {
         selected = isSelected;
         if (state == null) setContentDescription("Generated map. Start a new game.");
         else setContentDescription("Generated map. " + state.name + " at " + state.x + ", " + state.y
-                + (selected ? ". Selected." : ". Tap the Settler to select."));
+                + (selected ? ". Selected." : ". Tap a unit to select; Actions lists stacked units."));
         invalidate();
     }
 
@@ -93,6 +93,11 @@ final class MapView extends View {
                 canvas.drawBitmap(texture, null, destination, paint);
                 canvas.restore();
             }
+            if (visible.road > 0 || !visible.improvement.isEmpty()) {
+                paint.setColor(0xffffdd6b); paint.setTextAlign(Paint.Align.CENTER); paint.setTextSize(halfHeight * .45f);
+                canvas.drawText((visible.road > 0 ? "R " : "") + visible.improvement,
+                        screenX(visible.x, visible.y), screenY(visible.x, visible.y) + halfHeight * .7f, paint);
+            }
             if (!"Visible".equals(visible.visibility)) tile(canvas, visible.x, visible.y, 0x77000000, false);
             tile(canvas, visible.x, visible.y, 0xff263b35, true);
             if (!"None".equals(visible.vegetation)) {
@@ -109,8 +114,26 @@ final class MapView extends View {
                 canvas.drawCircle(screenX(destination[0], destination[1]), screenY(destination[0], destination[1]), halfHeight * .13f, paint);
             }
         }
+        try {
+            for (org.json.JSONObject city : state.displayedCities) {
+                org.json.JSONObject pos = city.getJSONObject("position");
+                float x = screenX(pos.getInt("x"), pos.getInt("y")), y = screenY(pos.getInt("x"), pos.getInt("y"));
+                paint.setColor(city.getInt("owner") == 0 ? 0xffeddb9a : 0xffff7777);
+                canvas.drawRect(x - halfHeight * .55f, y - halfHeight, x + halfHeight * .55f, y, paint);
+                paint.setTextSize(halfHeight * .4f); paint.setTextAlign(Paint.Align.CENTER);
+                canvas.drawText(city.getString("name") + " (" + city.getInt("population") + ")", x, y - halfHeight * 1.1f, paint);
+            }
+            for (int i = 0; i < state.units.length(); i++) {
+                org.json.JSONObject unit = state.units.getJSONObject(i);
+                if (unit.getJSONObject("id").getInt("index") == state.index) continue;
+                org.json.JSONObject pos = unit.getJSONObject("position");
+                marker(canvas, screenX(pos.getInt("x"), pos.getInt("y")), screenY(pos.getInt("x"), pos.getInt("y")),
+                        unit.getString("unit_type_name"), unit.getInt("owner") == 0 ? Color.WHITE : 0xffff7777);
+            }
+        } catch (org.json.JSONException failure) { throw new IllegalStateException(failure); }
+        if (state.index < 0) return;
         float cx = screenX(state.x, state.y), cy = screenY(state.x, state.y);
-        if (assets != null) {
+        if (assets != null && "settler".equals(state.name)) {
             long elapsed = SystemClock.uptimeMillis() - moveStarted;
             boolean moving = elapsed < (long) assets.runFrames * assets.runDelay;
             Bitmap sprite = moving ? assets.run : assets.idle;
@@ -138,15 +161,15 @@ final class MapView extends View {
             canvas.drawBitmap(sprite, source, destination, paint);
             if (getWindowVisibility() == VISIBLE) postInvalidateDelayed(delay);
         } else {
-            paint.setColor(selected ? 0xffffdd6b : Color.WHITE);
-            canvas.drawCircle(cx, cy, halfHeight * .72f, paint);
-            paint.setColor(0xff24364a);
-            canvas.drawCircle(cx, cy, halfHeight * .57f, paint);
-            paint.setColor(Color.WHITE);
-            paint.setTextSize(halfHeight * .75f);
-            paint.setTextAlign(Paint.Align.CENTER);
-            canvas.drawText("S", cx, cy + halfHeight * .27f, paint);
+            marker(canvas, cx, cy, state.name, selected ? 0xffffdd6b : Color.WHITE);
         }
+    }
+
+    private void marker(Canvas canvas, float x, float y, String name, int color) {
+        paint.setColor(color); canvas.drawCircle(x, y, halfHeight * .65f, paint);
+        paint.setColor(0xff24364a); paint.setTextSize(halfHeight * .5f); paint.setTextAlign(Paint.Align.CENTER);
+        String label = "warrior".equals(name) ? "War" : "worker".equals(name) ? "Wkr" : name.substring(0, Math.min(3, name.length()));
+        canvas.drawText(label, x, y + halfHeight * .2f, paint);
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {

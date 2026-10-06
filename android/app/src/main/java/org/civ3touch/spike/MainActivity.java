@@ -12,7 +12,7 @@ import android.widget.TextView;
 public final class MainActivity extends Activity {
     private GameController controller;
     private TextView status;
-    private Button newGame, endTurn, importData, audio;
+    private Button newGame, endTurn, importData, audio, actions;
     private MapView map;
 
     @Override public void onCreate(Bundle savedState) {
@@ -51,6 +51,10 @@ public final class MainActivity extends Activity {
         endTurn.setOnClickListener(view -> controller.endTurn());
         controls.addView(newGame, new LinearLayout.LayoutParams(0, -2, 1));
         controls.addView(endTurn, new LinearLayout.LayoutParams(0, -2, 1));
+        actions = new Button(this);
+        actions.setText(R.string.actions);
+        actions.setOnClickListener(view -> new GameMenus(this, controller).main());
+        controls.addView(actions, new LinearLayout.LayoutParams(0, -2, 1));
         root.addView(controls);
         status = new TextView(this);
         status.setTextSize(16);
@@ -65,10 +69,23 @@ public final class MainActivity extends Activity {
         map.setOnTileTap((x, y) -> {
             GameState state = controller.state;
             if (state == null || controller.busy) return;
-            if (x == state.x && y == state.y) {
+            if (state.index >= 0 && x == state.x && y == state.y) {
                 controller.selected = true;
                 controller.notifyChanged();
-            } else if (controller.selected) controller.move(x, y);
+            } else {
+                if (controller.selected) {
+                    for (int[] destination : state.destinations) {
+                        if (destination[0] == x && destination[1] == y) { controller.move(x, y); return; }
+                    }
+                }
+                try {
+                    for (org.json.JSONObject unit : state.ownUnits) {
+                        org.json.JSONObject position = unit.getJSONObject("position");
+                        if (position.getInt("x") == x && position.getInt("y") == y) { controller.selectUnit(unit); return; }
+                    }
+                } catch (org.json.JSONException failure) { controller.error = failure.getMessage(); }
+                if (controller.selected) controller.move(x, y);
+            }
         });
         root.addView(map, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(root);
@@ -87,6 +104,7 @@ public final class MainActivity extends Activity {
         audio.setEnabled(controller.assets != null && !controller.busy);
         audio.setText(controller.audioEnabled ? R.string.audio_on : R.string.audio_off);
         endTurn.setEnabled(state != null && !controller.busy);
+        actions.setEnabled(!controller.busy);
         map.setEnabled(!controller.busy);
         map.display(state, controller.selected, controller.assets);
         if (controller.busy) status.setText(controller.progress);
@@ -98,7 +116,9 @@ public final class MainActivity extends Activity {
                     ? getString(R.string.selected, state.x, state.y, state.movement / 3.0)
                         + " " + getString(state.destinations.isEmpty() ? R.string.no_step : R.string.choose_tile)
                     : getString(R.string.select_unit);
-            status.setText(getString(R.string.game_status, state.turn, instruction, state.message));
+            if (state.index < 0) instruction = "Use Actions for cities, research or saves.";
+            String message = state.root.isNull("game_over") ? state.message : getString(R.string.game_over, state.root.optInt("game_over"));
+            status.setText(getString(R.string.game_status, state.turn, instruction, message));
         }
     }
 
