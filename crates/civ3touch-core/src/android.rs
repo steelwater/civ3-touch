@@ -104,6 +104,7 @@ pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_endTurn(
 #[no_mangle]
 pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_close(_: JNIEnv, _: JClass) {
     SESSION.with(|s| *s.borrow_mut() = None);
+    ASSETS.with(|a| *a.borrow_mut() = None);
 }
 
 #[no_mangle]
@@ -125,6 +126,73 @@ pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_smokeTest(
             };
             let _ = env.throw_new("java/lang/IllegalStateException", message);
             -1
+        }
+    }
+}
+
+thread_local! { static ASSETS: RefCell<Option<crate::assets::Assets>> = const { RefCell::new(None) }; }
+
+#[no_mangle]
+pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_importProfile(
+    env: JNIEnv,
+    _: JClass,
+) -> jstring {
+    response(env, |_| Ok(crate::assets::profile().to_string()))
+}
+
+#[no_mangle]
+pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_loadAssets(
+    env: JNIEnv,
+    _: JClass,
+    directory: JString,
+) -> jstring {
+    response(env, |env| {
+        let path: String = env
+            .get_string(&directory)
+            .map_err(|e| e.to_string())?
+            .into();
+        let assets = crate::assets::load(Path::new(&path))?;
+        let metadata = assets.metadata().to_string();
+        ASSETS.with(|a| *a.borrow_mut() = Some(assets));
+        Ok(metadata)
+    })
+}
+
+#[no_mangle]
+pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_imagePixels(
+    mut env: JNIEnv,
+    _: JClass,
+    key: JString,
+) -> jni::sys::jintArray {
+    let result = (|| -> Result<jni::sys::jintArray, String> {
+        let key: String = env.get_string(&key).map_err(|e| e.to_string())?.into();
+        ASSETS.with(|a| {
+            let slot = a.borrow();
+            let image = slot
+                .as_ref()
+                .and_then(|a| a.images.iter().find(|i| i.key == key))
+                .ok_or("Asset not loaded")?;
+            let pixels: Vec<i32> = image
+                .rgba
+                .chunks_exact(4)
+                .map(|p| {
+                    ((p[3] as u32) << 24 | (p[0] as u32) << 16 | (p[1] as u32) << 8 | p[2] as u32)
+                        as i32
+                })
+                .collect();
+            let array = env
+                .new_int_array(pixels.len() as i32)
+                .map_err(|e| e.to_string())?;
+            env.set_int_array_region(&array, 0, &pixels)
+                .map_err(|e| e.to_string())?;
+            Ok(array.into_raw())
+        })
+    })();
+    match result {
+        Ok(array) => array,
+        Err(message) => {
+            let _ = env.throw_new("java/lang/IllegalStateException", message);
+            std::ptr::null_mut()
         }
     }
 }

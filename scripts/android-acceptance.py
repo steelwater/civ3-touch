@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 
 parser = argparse.ArgumentParser()
 parser.add_argument('serial', help='explicit ARM64 device/emulator serial')
+parser.add_argument("--imported", action="store_true", help="use an existing completed GOG import instead of debug synthetic mode")
 args = parser.parse_args()
 package = 'org.civ3touch.spike'
 
@@ -75,14 +76,14 @@ def tap_tile(dx=0, dy=0):
 
 def launch(missing=False):
     adb('shell', 'am', 'force-stop', package)
-    adb('shell', 'am', 'start', '-W', '-n', package + '/.MainActivity', '--ez', 'missingRules', str(missing).lower())
+    adb('shell', 'am', 'start', '-W', '-n', package + '/.MainActivity', '--ez', 'missingRules', str(missing).lower(), '--ez', 'synthetic', str(not args.imported).lower())
     return adb('shell', 'pidof', package).strip()
 
 
 
 def main():
     pid = launch()
-    tap_button('New Game')
+    tap_button('Play' if args.imported else 'New Game')
     initial, count = wait_state(pid, 0)
     unit = initial['view']['known_units'][0]
     assert initial['view']['turn'] == 1 and initial['view']['visible_tile_count']
@@ -119,11 +120,11 @@ def main():
     assert '. Selected.' not in map_node().get('content-desc')
     print('PASS: New Game resets turn, unit and selection')
     launch(missing=True)
-    tap_button('New Game')
+    tap_button('Play' if args.imported else 'New Game')
     node(lambda n: n.get('text', '').startswith('Could not complete action.'))
     print('PASS: Missing rules show a readable error')
     pid = launch()
-    tap_button('New Game')
+    tap_button('Play' if args.imported else 'New Game')
     recovered, _ = wait_state(pid, 0)
     assert recovered['view']['turn'] == 1
     print('PASS: Normal launch recovers after missing rules')

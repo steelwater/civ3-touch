@@ -21,6 +21,7 @@ final class GameState {
     }
     final int turn, width, height, index, generation, x, y, movement;
     final String name, message;
+    final boolean unitMoved;
     final List<Tile> tiles = new ArrayList<>();
     final List<int[]> destinations = new ArrayList<>();
 
@@ -52,6 +53,7 @@ final class GameState {
         JSONObject result = root.getJSONObject("result");
         JSONArray errors = result.getJSONArray("errors");
         String feedback = "";
+        boolean moved = false;
         if (errors.length() > 0) {
             Object error = errors.get(0);
             feedback = error instanceof JSONObject ? ((JSONObject) error).getString("Custom") : error.toString();
@@ -59,11 +61,12 @@ final class GameState {
             JSONArray events = result.getJSONArray("events");
             for (int i = 0; i < events.length(); i++) {
                 JSONObject event = events.getJSONObject(i);
-                if (event.has("UnitMoved")) feedback = "Moved one tile.";
+                if (event.has("UnitMoved")) { feedback = "Moved one tile."; moved = true; }
                 if (event.has("TurnStarted")) feedback = "Turn advanced.";
                 if (event.has("MoveBlocked")) feedback = "Move blocked: " + event.getJSONObject("MoveBlocked").getString("reason");
             }
         }
         message = feedback;
+        unitMoved = moved;
     }
 }

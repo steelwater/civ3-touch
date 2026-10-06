@@ -1,6 +1,7 @@
 package org.civ3touch.spike;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -11,13 +12,13 @@ import android.widget.TextView;
 public final class MainActivity extends Activity {
     private GameController controller;
     private TextView status;
-    private Button newGame, endTurn;
+    private Button newGame, endTurn, importData, audio;
     private MapView map;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
         controller = (GameController) getLastNonConfigurationInstance();
-        if (controller == null) controller = new GameController(this);
+        if (controller == null) controller = new GameController(this, BuildConfig.DEBUG && (getIntent().getBooleanExtra("synthetic", false) || getIntent().getBooleanExtra("smokeTest", false)));
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -25,6 +26,22 @@ public final class MainActivity extends Activity {
                     insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
             return insets;
         });
+        LinearLayout importControls = new LinearLayout(this);
+        importData = new Button(this);
+        importData.setText(R.string.import_data);
+        importData.setOnClickListener(view -> {
+            Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try { startActivityForResult(picker, 2); }
+            catch (android.content.ActivityNotFoundException failure) {
+                controller.error = "No system folder picker is available on this device."; render();
+            }
+        });
+        audio = new Button(this);
+        audio.setOnClickListener(view -> controller.toggleAudio());
+        importControls.addView(importData, new LinearLayout.LayoutParams(0, -2, 3));
+        importControls.addView(audio, new LinearLayout.LayoutParams(0, -2, 1));
+        root.addView(importControls);
         LinearLayout controls = new LinearLayout(this);
         newGame = new Button(this);
         newGame.setText(R.string.new_game);
@@ -64,13 +81,18 @@ public final class MainActivity extends Activity {
 
     private void render() {
         GameState state = controller.state;
-        newGame.setEnabled(!controller.busy);
+        newGame.setText(state == null && !controller.prototype ? R.string.play : R.string.new_game);
+        newGame.setEnabled(!controller.busy && (controller.assets != null || controller.prototype));
+        importData.setEnabled(!controller.busy);
+        audio.setEnabled(controller.assets != null && !controller.busy);
+        audio.setText(controller.audioEnabled ? R.string.audio_on : R.string.audio_off);
         endTurn.setEnabled(state != null && !controller.busy);
         map.setEnabled(!controller.busy);
-        map.display(state, controller.selected);
-        if (controller.busy) status.setText(R.string.working);
+        map.display(state, controller.selected, controller.assets);
+        if (controller.busy) status.setText(controller.progress);
         else if (!controller.error.isEmpty()) status.setText(controller.error);
-        else if (state == null) status.setText(R.string.welcome);
+        else if (state == null) status.setText(controller.assets == null ? getString(R.string.welcome)
+                : getString(R.string.import_ready));
         else {
             String instruction = controller.selected
                     ? getString(R.string.selected, state.x, state.y, state.movement / 3.0)
@@ -79,6 +101,13 @@ public final class MainActivity extends Activity {
             status.setText(getString(R.string.game_status, state.turn, instruction, state.message));
         }
     }
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == 2 && result == RESULT_OK && data != null && data.getData() != null) controller.loadImport(data.getData());
+    }
+    @Override protected void onResume() { super.onResume(); controller.setForeground(true); }
+    @Override protected void onPause() { controller.setForeground(false); super.onPause(); }
 
     @Override public Object onRetainNonConfigurationInstance() { return controller; }
     @Override protected void onDestroy() {

@@ -2,13 +2,17 @@ package org.civ3touch.spike;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Bitmap;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.os.SystemClock;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.view.MotionEvent;
 import android.view.View;
 
-/** Synthetic isometric tiles. Camera follows the unit; no proprietary artwork. */
+/** Presentation only: decoded imported art over the native player view. */
 final class MapView extends View {
     interface TileTap { void tap(int x, int y); }
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -18,6 +22,11 @@ final class MapView extends View {
     private GameState state;
     private boolean selected;
     private float downX, downY;
+    private ImportedAssets assets;
+    private long moveStarted;
+    private int moveDx, moveDy, direction = 1;
+    private final Rect source = new Rect();
+    private final RectF destination = new RectF();
 
     public MapView(Context context) {
         super(context);
@@ -31,11 +40,25 @@ final class MapView extends View {
 
     void setOnTileTap(TileTap onTap) { this.onTap = onTap; }
 
-    void display(GameState next, boolean isSelected) {
+    void display(GameState next, boolean isSelected, ImportedAssets imported) {
+        if (state != null && next != null && state.index == next.index && state.turn <= next.turn
+                && next.unitMoved && (state.x != next.x || state.y != next.y)) {
+            moveDx = next.x - state.x; moveDy = next.y - state.y;
+            moveStarted = SystemClock.uptimeMillis();
+            int dx = Integer.signum(moveDx), dy = Integer.signum(moveDy);
+            if (dx == 0) direction = dy > 0 ? 0 : 4;
+            else if (dy == 0) direction = dx > 0 ? 2 : 6;
+            else if (dx > 0) direction = dy > 0 ? 1 : 3;
+            else direction = dy > 0 ? 7 : 5;
+        } else if (next == null || state == null || (next != state && !next.unitMoved)) {
+            moveStarted = 0;
+        }
+        assets = imported;
         state = next;
         selected = isSelected;
-        if (state != null) setContentDescription("Generated map. " + state.name + " at " + state.x + ", " + state.y
-                + (selected ? ". Selected." : ". Tap the S marker to select."));
+        if (state == null) setContentDescription("Generated map. Start a new game.");
+        else setContentDescription("Generated map. " + state.name + " at " + state.x + ", " + state.y
+                + (selected ? ". Selected." : ". Tap the Settler to select."));
         invalidate();
     }
 
@@ -66,6 +89,15 @@ final class MapView extends View {
         }
         for (GameState.Tile visible : state.tiles) {
             tile(canvas, visible.x, visible.y, terrainColor(visible.terrain), false);
+            Bitmap texture = assets == null ? null : assets.terrain.get(visible.terrain);
+            if (texture != null) {
+                float tx = screenX(visible.x, visible.y), ty = screenY(visible.x, visible.y);
+                destination.set(tx - halfWidth, ty - halfHeight, tx + halfWidth, ty + halfHeight);
+                canvas.save(); canvas.clipPath(diamond);
+                paint.setColor(Color.WHITE);
+                canvas.drawBitmap(texture, null, destination, paint);
+                canvas.restore();
+            }
             if (!"Visible".equals(visible.visibility)) tile(canvas, visible.x, visible.y, 0x77000000, false);
             tile(canvas, visible.x, visible.y, 0xff263b35, true);
             if (!"None".equals(visible.vegetation)) {
@@ -83,14 +115,43 @@ final class MapView extends View {
             }
         }
         float cx = screenX(state.x, state.y), cy = screenY(state.x, state.y);
-        paint.setColor(selected ? 0xffffdd6b : Color.WHITE);
-        canvas.drawCircle(cx, cy, halfHeight * .72f, paint);
-        paint.setColor(0xff24364a);
-        canvas.drawCircle(cx, cy, halfHeight * .57f, paint);
-        paint.setColor(Color.WHITE);
-        paint.setTextSize(halfHeight * .75f);
-        paint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText("S", cx, cy + halfHeight * .27f, paint);
+        if (assets != null) {
+            long elapsed = SystemClock.uptimeMillis() - moveStarted;
+            boolean moving = elapsed < (long) assets.runFrames * assets.runDelay;
+            Bitmap sprite = moving ? assets.run : assets.idle;
+            int frames = moving ? assets.runFrames : assets.idleFrames;
+            int delay = moving ? assets.runDelay : assets.idleDelay;
+            int frameHeight = sprite.getHeight() / frames;
+            int frameWidth = sprite.getWidth() / 8;
+            int frame = (int) ((moving ? elapsed : SystemClock.uptimeMillis()) / delay % frames);
+            source.set(direction * frameWidth, frame * frameHeight, (direction + 1) * frameWidth, (frame + 1) * frameHeight);
+            if (moving) {
+                float remaining = 1 - (float) elapsed / (assets.runFrames * assets.runDelay);
+                cx -= (moveDx - moveDy) * halfWidth * remaining;
+                cy -= (moveDx + moveDy) * halfHeight * remaining;
+            }
+            float scale = halfWidth / 32;
+            if (selected) {
+                paint.setColor(0xffffdd6b); paint.setStyle(Paint.Style.STROKE);
+                canvas.drawOval(cx - halfHeight * .65f, cy - halfHeight * .2f,
+                        cx + halfHeight * .65f, cy + halfHeight * .3f, paint);
+                paint.setStyle(Paint.Style.FILL);
+            }
+            destination.set(cx - frameWidth * scale / 2, cy - frameHeight * scale + halfHeight * .25f,
+                    cx + frameWidth * scale / 2, cy + halfHeight * .25f);
+            paint.setColor(Color.WHITE);
+            canvas.drawBitmap(sprite, source, destination, paint);
+            if (getWindowVisibility() == VISIBLE) postInvalidateDelayed(delay);
+        } else {
+            paint.setColor(selected ? 0xffffdd6b : Color.WHITE);
+            canvas.drawCircle(cx, cy, halfHeight * .72f, paint);
+            paint.setColor(0xff24364a);
+            canvas.drawCircle(cx, cy, halfHeight * .57f, paint);
+            paint.setColor(Color.WHITE);
+            paint.setTextSize(halfHeight * .75f);
+            paint.setTextAlign(Paint.Align.CENTER);
+            canvas.drawText("S", cx, cy + halfHeight * .27f, paint);
+        }
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
