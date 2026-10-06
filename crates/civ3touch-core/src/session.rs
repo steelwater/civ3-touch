@@ -1,39 +1,67 @@
-//! Small, single-player sandbox adapter. All legality stays in FreeC3.
+//! Platform-neutral playable session. FreeC3 owns rules; this adapter owns queues and replay.
+use fc3_core::ai::{Agent, SimpleAgent};
+use fc3_core::city::ProductionItem;
 use fc3_core::engine::{Engine, GameConfig};
-use fc3_core::id::UnitId;
-use fc3_core::protocol::{AvailableCommand, Command, CommandResult};
+use fc3_core::id::{CityId, UnitId};
+use fc3_core::protocol::{AvailableCommand, Command, CommandResult, GameError};
 use fc3_core::types::{PlayerId, TileCoord};
 use fc3_core::world::WorldConfig;
 use serde_json::{json, Value};
 use std::path::Path;
 
 const PLAYER: PlayerId = PlayerId(0);
+const SAVE_VERSION: u64 = 1;
+// Change this contract whenever the rules, session policy or engine version changes.
+const RULESET: &str = "freec3-90fc7ee-civ3touch-m3-v1";
+const MAX_ACTIONS: usize = 20_000;
+pub const MAX_SAVE_BYTES: usize = 16 * 1024 * 1024;
 
 pub struct Session {
     engine: Engine,
+    queues: Vec<(CityId, Vec<ProductionItem>)>,
+    journal: Vec<Value>,
+    rules_identity: std::collections::BTreeMap<String, String>,
 }
 
 impl Session {
     pub fn new(rules: &Path) -> Result<Self, String> {
         let rules = rules.canonicalize().map_err(|e| e.to_string())?;
+        let mut rules_identity = std::collections::BTreeMap::new();
+        for entry in std::fs::read_dir(&rules).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            if entry
+                .path()
+                .extension()
+                .is_some_and(|extension| extension == "lua")
+            {
+                rules_identity.insert(
+                    entry.file_name().to_string_lossy().into_owned(),
+                    std::fs::read_to_string(entry.path()).map_err(|e| e.to_string())?,
+                );
+            }
+        }
         let engine = Engine::new_game(&GameConfig {
             world: WorldConfig {
                 width: 16,
                 height: 16,
                 wrap_x: false,
                 wrap_y: false,
-                num_players: 1,
+                num_players: 2,
                 seed: 42,
             },
             mod_paths: vec![rules.to_str().ok_or("rules path is not UTF-8")?.into()],
-            units_per_player: vec!["settler".into()],
+            units_per_player: vec!["settler".into(), "worker".into(), "warrior".into()],
             max_turns: None,
         })
         .map_err(|e| e.to_string())?;
-        Ok(Self { engine })
+        Ok(Self {
+            engine,
+            queues: vec![],
+            journal: vec![],
+            rules_identity,
+        })
     }
 
-    /// Only expose immediate steps, never a queued multi-tile destination.
     fn moves(&mut self) -> Vec<(UnitId, Vec<TileCoord>)> {
         self.engine
             .available_commands(PLAYER)
@@ -64,60 +92,307 @@ impl Session {
             .into_iter()
             .map(|(id, destinations)| json!({"unit_id": id, "destinations": destinations}))
             .collect();
-        json!({
-            "view": self.engine.player_view(PLAYER),
-            "moves": moves,
-            "result": result,
-        })
+        json!({"view": self.engine.player_view(PLAYER), "moves": moves,
+            "available": self.engine.available_commands(PLAYER), "queues": self.queues,
+            "game_over": self.engine.is_game_over(), "result": result})
     }
-
     pub fn initial_snapshot(&mut self) -> Value {
         self.snapshot(CommandResult::with_events(vec![]))
     }
-
     pub fn move_unit(&mut self, unit: UnitId, destination: TileCoord) -> Value {
-        let allowed = self
-            .moves()
-            .iter()
-            .any(|(id, destinations)| *id == unit && destinations.contains(&destination));
-        let result = if allowed {
-            self.engine.submit_command(
-                PLAYER,
-                Command::MoveUnit {
-                    unit_id: unit,
-                    destination,
-                },
-            )
-        } else {
-            CommandResult::err(fc3_core::protocol::GameError::Custom(
-                "Choose a highlighted adjacent tile; otherwise end the turn to refresh movement."
-                    .into(),
-            ))
-        };
+        self.request(json!(Command::MoveUnit {
+            unit_id: unit,
+            destination
+        }))
+    }
+    pub fn end_turn(&mut self) -> Value {
+        self.request(json!(Command::EndTurn))
+    }
+
+    pub fn request(&mut self, request: Value) -> Value {
+        if self.journal.len() >= MAX_ACTIONS {
+            return self.snapshot(error(
+                "This prototype save has reached its 20,000-action limit.",
+            ));
+        }
+        let result = self.dispatch(&request);
+        // Retain rejected commands too: replay checks their exact outcomes, and never
+        // silently assumes an upstream error meant there was no state mutation.
+        self.journal
+            .push(json!({"request": request, "result": result}));
         self.snapshot(result)
     }
 
-    /// End Turn explicitly skips unused movement in this one-player sandbox.
-    pub fn end_turn(&mut self) -> Value {
-        let mut events = vec![];
-        for command in self.engine.available_commands(PLAYER) {
+    fn dispatch(&mut self, request: &Value) -> CommandResult {
+        if self.engine.is_game_over().is_some() || !self.engine.is_player_alive(PLAYER) {
+            return error("The game has ended. Start a new game or load a save.");
+        }
+        if let Some(queue) = request.get("QueueProduction") {
+            let parsed = (|| -> Result<_, serde_json::Error> {
+                Ok((
+                    serde_json::from_value::<CityId>(queue["city_id"].clone())?,
+                    serde_json::from_value::<ProductionItem>(queue["item"].clone())?,
+                ))
+            })();
+            let Ok((city, item)) = parsed else {
+                return error("Invalid production request");
+            };
+            if !self.production_allowed(city, &item) {
+                return error("Production is not available");
+            }
+            let pending = self
+                .queues
+                .iter()
+                .find(|(id, _)| *id == city)
+                .map_or(0, |(_, q)| q.len());
+            if pending >= 8 {
+                return error("A city can queue at most eight items");
+            }
+            if let Some((_, items)) = self.queues.iter_mut().find(|(id, _)| *id == city) {
+                items.push(item);
+            } else {
+                self.queues.push((city, vec![item]));
+            }
+            return self.advance_queues(&[]);
+        }
+        if let Some(id) = request.get("ClearQueue") {
+            let Ok(city) = serde_json::from_value::<CityId>(id.clone()) else {
+                return error("Invalid city");
+            };
+            self.queues.retain(|(id, _)| *id != city);
+            return CommandResult::with_events(vec![]);
+        }
+        let Ok(command) = serde_json::from_value::<Command>(request.clone()) else {
+            return error("Invalid game command");
+        };
+        if matches!(command, Command::EndTurn) {
+            return self.finish_round();
+        }
+        let allowed = match &command {
+            Command::MoveUnit {
+                unit_id,
+                destination,
+            } => self
+                .moves()
+                .iter()
+                .any(|(id, destinations)| id == unit_id && destinations.contains(destination)),
+            Command::SetProduction { city_id, item } => self.production_allowed(*city_id, item),
+            _ => self
+                .engine
+                .available_commands(PLAYER)
+                .iter()
+                .any(|available| match (available, &command) {
+                    (
+                        AvailableCommand::UnitAction {
+                            unit_id: a,
+                            action_id: b,
+                            ..
+                        },
+                        Command::PerformAction { unit_id, action_id },
+                    ) => a == unit_id && b == action_id,
+                    (
+                        AvailableCommand::Attack { unit_id, targets },
+                        Command::AttackUnit { attacker, defender },
+                    ) => {
+                        unit_id == attacker
+                            && targets.contains(defender)
+                            && self
+                                .engine
+                                .player_view(PLAYER)
+                                .known_units
+                                .iter()
+                                .any(|u| u.id == *attacker && u.attack > 0)
+                    }
+                    (
+                        AvailableCommand::Fortify { unit_id: a },
+                        Command::FortifyUnit { unit_id },
+                    )
+                    | (AvailableCommand::Skip { unit_id: a }, Command::SkipUnit { unit_id }) => {
+                        a == unit_id
+                    }
+                    (
+                        AvailableCommand::SetResearch { options },
+                        Command::SetResearch { tech_id },
+                    ) => options.iter().any(|t| t.id == *tech_id),
+                    _ => false,
+                }),
+        };
+        if !allowed {
+            return error("Choose an available action or a highlighted adjacent tile.");
+        }
+        self.engine.submit_command(PLAYER, command)
+    }
+
+    fn production_allowed(&self, city: CityId, item: &ProductionItem) -> bool {
+        self.engine.available_commands(PLAYER).iter().any(|a| matches!(a,
+            AvailableCommand::SetProduction { city_id, options } if *city_id == city && options.iter().any(|o| o.item == *item)))
+    }
+
+    fn advance_queues(&mut self, completed: &[CityId]) -> CommandResult {
+        let cities = self.engine.player_view(PLAYER).own_cities;
+        self.queues
+            .retain(|(id, _)| cities.iter().any(|c| c.id == *id));
+        let mut result = CommandResult::with_events(vec![]);
+        for city in cities
+            .iter()
+            .filter(|c| c.producing.is_none() || completed.contains(&c.id))
+        {
+            let Some(index) = self
+                .queues
+                .iter()
+                .position(|(id, items)| *id == city.id && !items.is_empty())
+            else {
+                continue;
+            };
+            let item = self.queues[index].1[0].clone();
+            if !self.production_allowed(city.id, &item) {
+                result.errors.push(GameError::Custom(format!(
+                    "Queued item in {} is no longer available; queue cleared.",
+                    city.name
+                )));
+                self.queues[index].1.clear();
+                continue;
+            }
+            let applied = self.engine.submit_command(
+                PLAYER,
+                Command::SetProduction {
+                    city_id: city.id,
+                    item,
+                },
+            );
+            if applied.is_ok() {
+                self.queues[index].1.remove(0);
+            }
+            result.events.extend(applied.events);
+            result.errors.extend(applied.errors);
+        }
+        result
+    }
+
+    fn skip_and_end(&mut self, player: PlayerId) -> CommandResult {
+        for command in self.engine.available_commands(player) {
             if let AvailableCommand::Skip { unit_id } = command {
                 let result = self
                     .engine
-                    .submit_command(PLAYER, Command::SkipUnit { unit_id });
+                    .submit_command(player, Command::SkipUnit { unit_id });
                 if !result.is_ok() {
-                    return self.snapshot(result);
+                    return result;
                 }
-                events.extend(result.events);
             }
         }
-        let result = self.engine.submit_command(PLAYER, Command::EndTurn);
-        events.extend(result.events);
-        self.snapshot(CommandResult {
-            events,
-            errors: result.errors,
-        })
+        self.engine.submit_command(player, Command::EndTurn)
     }
+
+    fn finish_round(&mut self) -> CommandResult {
+        let human = self.skip_and_end(PLAYER);
+        if !human.is_ok() {
+            return human;
+        }
+        // Restart the existing AI from the current world RNG each round. Its future
+        // decisions depend only on replayed state, not an unsaved private RNG stream.
+        let rng = self.engine.world().borrow().rng.clone();
+        let mut ai = SimpleAgent::new(rng);
+        let mut last = CommandResult::with_events(vec![]);
+        for _ in 0..256 {
+            let player = self.engine.current_player();
+            if player == PLAYER || self.engine.is_game_over().is_some() {
+                break;
+            }
+            let command = ai.decide(
+                &self.engine.player_view(player),
+                &self.engine.available_commands(player),
+            );
+            last = self.engine.submit_command(player, command);
+            if !last.is_ok() {
+                last = self.skip_and_end(player);
+                break;
+            }
+        }
+        if self.engine.current_player() != PLAYER && self.engine.is_game_over().is_none() {
+            last = self.skip_and_end(self.engine.current_player());
+        }
+        // AI movement/combat events can expose hidden map information. Return only
+        // the new human view and human turn-start economy events, never AI actions.
+        if self.engine.current_player() == PLAYER {
+            last.events.retain(|e| {
+                !matches!(
+                    e,
+                    fc3_core::protocol::Event::UnitMoved { .. }
+                        | fc3_core::protocol::Event::TilesRevealed {
+                            player: PlayerId(1),
+                            ..
+                        }
+                )
+            });
+        } else {
+            last.events.clear();
+        }
+        let completed: Vec<_> = last
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                fc3_core::protocol::Event::ProductionComplete { city_id, .. } => Some(*city_id),
+                _ => None,
+            })
+            .collect();
+        let queues = self.advance_queues(&completed);
+        last.events.extend(queues.events);
+        last.errors.extend(queues.errors);
+        last
+    }
+
+    pub fn save(&self) -> Result<String, String> {
+        let world =
+            serde_json::to_value(&*self.engine.world().borrow()).map_err(|e| e.to_string())?;
+        let text = json!({"version": SAVE_VERSION, "ruleset": RULESET, "rules": self.rules_identity, "journal": self.journal,
+            "world": world, "queues": self.queues, "turn": self.engine.current_turn(),
+            "player": self.engine.current_player()})
+        .to_string();
+        if text.len() > MAX_SAVE_BYTES {
+            return Err("Save exceeds the prototype's 16 MiB limit".into());
+        }
+        Ok(text)
+    }
+
+    pub fn load(rules: &Path, text: &str) -> Result<Self, String> {
+        if text.len() > MAX_SAVE_BYTES {
+            return Err("Save exceeds the prototype's 16 MiB limit".into());
+        }
+        let saved: Value = serde_json::from_str(text).map_err(|_| "Save is not valid JSON")?;
+        if saved["version"] != SAVE_VERSION || saved["ruleset"] != RULESET {
+            return Err("Unsupported save version or ruleset".into());
+        }
+        let journal = saved["journal"]
+            .as_array()
+            .ok_or("Save journal is missing")?;
+        if journal.len() > MAX_ACTIONS {
+            return Err("Save action limit exceeded".into());
+        }
+        let mut game = Self::new(rules)?;
+        if json!(game.rules_identity) != saved["rules"] {
+            return Err("Save rules differ from the installed rules".into());
+        }
+        for entry in journal {
+            let result = game.dispatch(&entry["request"]);
+            if json!(result) != entry["result"] {
+                return Err("Save replay diverged; existing session was preserved".into());
+            }
+        }
+        let world =
+            serde_json::to_value(&*game.engine.world().borrow()).map_err(|e| e.to_string())?;
+        if world != saved["world"]
+            || json!(game.queues) != saved["queues"]
+            || json!(game.engine.current_turn()) != saved["turn"]
+            || json!(game.engine.current_player()) != saved["player"]
+        {
+            return Err("Save state verification failed; existing session was preserved".into());
+        }
+        game.journal = journal.clone();
+        Ok(game)
+    }
+}
+fn error(message: &str) -> CommandResult {
+    CommandResult::err(GameError::Custom(message.into()))
 }
 
 #[cfg(test)]
@@ -133,7 +408,7 @@ mod tests {
         let mut game = session();
         let before = game.engine.player_view(PLAYER);
         assert!(!before.visible_tiles.is_empty());
-        assert_eq!(before.known_units.len(), 1);
+        assert_eq!(before.known_units.len(), 3);
         let unit = &before.known_units[0];
         assert_eq!(unit.unit_type_name, "settler");
         let (id, destinations) = game.moves().remove(0);
@@ -223,5 +498,248 @@ mod tests {
         assert_eq!(game.end_turn()["view"]["turn"], 3);
         assert_eq!(session().initial_snapshot()["view"]["turn"], 1);
         assert!(Session::new(Path::new("/nonexistent-civ3touch-rules")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod playable_tests {
+    use super::*;
+    fn rules() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../vendor/freec3/mods/base")
+    }
+    fn game() -> Session {
+        Session::new(&rules()).unwrap()
+    }
+    fn action(game: &mut Session, id: &str) {
+        let command = game
+            .engine
+            .available_commands(PLAYER)
+            .into_iter()
+            .find_map(|a| match a {
+                AvailableCommand::UnitAction {
+                    unit_id, action_id, ..
+                } if action_id == id => Some(Command::PerformAction { unit_id, action_id }),
+                _ => None,
+            })
+            .expect("action must be legal");
+        assert_eq!(game.request(json!(command))["result"]["errors"], json!([]));
+    }
+    fn round_trip(game: &mut Session) -> Session {
+        let mut restored = Session::load(&rules(), &game.save().unwrap()).unwrap();
+        assert_eq!(game.initial_snapshot(), restored.initial_snapshot());
+        assert_eq!(game.save().unwrap(), restored.save().unwrap());
+        restored
+    }
+    #[test]
+    fn economy_workers_research_and_queued_units_survive_reload_and_continue() {
+        let mut game = game();
+        action(&mut game, "build_city");
+        let city = game.engine.player_view(PLAYER).own_cities[0].id;
+        let warrior = game
+            .engine
+            .available_commands(PLAYER)
+            .into_iter()
+            .find_map(|a| match a {
+                AvailableCommand::SetProduction { options, .. } => options
+                    .into_iter()
+                    .find(|o| o.name == "warrior")
+                    .map(|o| o.item),
+                _ => None,
+            })
+            .unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                game.request(json!({"QueueProduction": {"city_id": city, "item": warrior}}))
+                    ["result"]["errors"],
+                json!([])
+            );
+        }
+        assert_eq!(
+            game.request(json!(Command::SetResearch {
+                tech_id: "bronze_working".into()
+            }))["result"]["errors"],
+            json!([])
+        );
+        action(&mut game, "build_road");
+        let mut restored = round_trip(&mut game);
+        let before_units = game
+            .engine
+            .player_view(PLAYER)
+            .known_units
+            .iter()
+            .filter(|u| u.owner == PLAYER)
+            .count();
+        for _ in 0..45 {
+            assert_eq!(game.end_turn(), restored.end_turn());
+        }
+        let view = game.engine.player_view(PLAYER);
+        assert!(view.researched_techs.contains(&"bronze_working".into()));
+        assert!(view.visible_tiles.iter().any(|t| t.road_level > 0));
+        assert!(
+            view.known_units
+                .iter()
+                .filter(|u| u.owner == PLAYER)
+                .count()
+                >= before_units + 2
+        );
+        assert!(view.own_cities[0].population > 1);
+        assert!(game.queues.iter().all(|(_, items)| items.is_empty()));
+        assert!(view.own_cities[0].commerce_per_turn.unwrap() > 0);
+        assert!(!game.engine.player_view(PlayerId(1)).own_cities.is_empty());
+        round_trip(&mut game);
+    }
+    #[test]
+    fn workers_finish_mines_and_irrigation_on_legal_terrain_after_reload() {
+        for (action_id, terrain, expected) in [
+            ("build_mine", "Hill", 1),
+            ("build_irrigation", "Grassland", 2),
+        ] {
+            let mut game = game();
+            let worker = game
+                .engine
+                .player_view(PLAYER)
+                .known_units
+                .iter()
+                .find(|u| u.unit_type_name == "worker")
+                .unwrap()
+                .id;
+            let target = game
+                .engine
+                .player_view(PLAYER)
+                .visible_tiles
+                .iter()
+                .filter(|t| {
+                    format!("{:?}", t.terrain) == terrain
+                        && (expected == 1 || format!("{:?}", t.vegetation) == "None")
+                })
+                .filter_map(|t| {
+                    game.engine
+                        .query_path(PLAYER, worker, t.coord)
+                        .map(|path| (t.coord, path.tiles.len()))
+                })
+                .min_by_key(|(_, length)| *length)
+                .unwrap()
+                .0;
+            for _ in 0..20 {
+                let position = game
+                    .engine
+                    .player_view(PLAYER)
+                    .known_units
+                    .iter()
+                    .find(|u| u.id == worker)
+                    .unwrap()
+                    .position;
+                if position == target {
+                    break;
+                }
+                let path = game.engine.query_path(PLAYER, worker, target).unwrap();
+                let result = game.move_unit(worker, path.tiles[1]);
+                assert_eq!(result["result"]["errors"], json!([]));
+                game.end_turn();
+            }
+            action(&mut game, action_id);
+            let mut restored = round_trip(&mut game);
+            for _ in 0..3 {
+                assert_eq!(game.end_turn(), restored.end_turn());
+            }
+            let view = game.engine.player_view(PLAYER);
+            let tile = view
+                .visible_tiles
+                .iter()
+                .find(|t| t.coord == target)
+                .unwrap();
+            assert_eq!(json!(tile.improvement), json!(expected));
+        }
+    }
+
+    #[test]
+    fn researched_buildings_can_be_queued_and_completed() {
+        let mut game = game();
+        action(&mut game, "build_city");
+        let city = game.engine.player_view(PLAYER).own_cities[0].id;
+        let granary = ProductionItem::Building {
+            building_id: "granary".into(),
+        };
+        assert!(!game.production_allowed(city, &granary));
+        game.request(json!(Command::SetResearch {
+            tech_id: "pottery".into()
+        }));
+        for _ in 0..80 {
+            if game.production_allowed(city, &granary) {
+                break;
+            }
+            game.end_turn();
+        }
+        assert!(game.production_allowed(city, &granary));
+        let queued = game.request(json!({"QueueProduction": {"city_id": city, "item": granary}}));
+        assert_eq!(queued["result"]["errors"], json!([]));
+        let mut loaded = round_trip(&mut game);
+        for _ in 0..40 {
+            assert_eq!(game.end_turn(), loaded.end_turn());
+        }
+        assert!(game.engine.player_view(PLAYER).own_cities[0]
+            .buildings
+            .as_ref()
+            .unwrap()
+            .contains(&"granary".into()));
+        assert!(!game.production_allowed(city, &granary));
+    }
+
+    #[test]
+    fn damaged_incompatible_or_tampered_saves_fail_without_replacing_the_live_game() {
+        let mut game = game();
+        game.end_turn();
+        let original = game.save().unwrap();
+        assert!(Session::load(&rules(), "{").is_err());
+        for (key, value) in [
+            ("version", json!(99)),
+            ("ruleset", json!("future")),
+            ("rules", json!({})),
+            ("world", json!({})),
+            ("journal", json!([])),
+        ] {
+            let mut saved: Value = serde_json::from_str(&original).unwrap();
+            saved[key] = value;
+            assert!(
+                Session::load(&rules(), &saved.to_string()).is_err(),
+                "{key}"
+            );
+        }
+        assert_eq!(game.save().unwrap(), original);
+    }
+    #[test]
+    fn exploration_and_combat_replay_preserve_future_random_outcomes() {
+        let mut game = game();
+        let mut agent = SimpleAgent::new(game.engine.world().borrow().rng.clone());
+        for _ in 0..120 {
+            if game.engine.is_game_over().is_some() {
+                break;
+            }
+            for _ in 0..128 {
+                let command = agent.decide(
+                    &game.engine.player_view(PLAYER),
+                    &game.engine.available_commands(PLAYER),
+                );
+                if matches!(command, Command::EndTurn) {
+                    break;
+                }
+                let result = game.request(json!(command));
+                if result["result"]["errors"] != json!([]) {
+                    break;
+                }
+            }
+            let mut loaded = round_trip(&mut game);
+            assert_eq!(game.end_turn(), loaded.end_turn());
+            assert_eq!(game.save().unwrap(), loaded.save().unwrap());
+            if game
+                .engine
+                .event_log
+                .iter()
+                .any(|(_, _, c)| matches!(c, Command::AttackUnit { .. }))
+            {
+                return;
+            }
+        }
+        panic!("Generated world must permit an encounter and combat through legal commands");
     }
 }
