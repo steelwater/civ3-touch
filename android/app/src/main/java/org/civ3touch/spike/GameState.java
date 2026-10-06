@@ -21,6 +21,7 @@ final class GameState {
     }
     final int turn, width, height, index, generation, x, y, movement;
     final String name, message;
+    final int facingColumn;
     final boolean unitMoved;
     final List<Tile> tiles = new ArrayList<>();
     final List<int[]> destinations = new ArrayList<>();
@@ -36,6 +37,18 @@ final class GameState {
         x = unit.getJSONObject("position").getInt("x");
         y = unit.getJSONObject("position").getInt("y");
         movement = unit.getInt("movement");
+        // Presentation mapping only; the engine owns the direction itself.
+        switch (unit.getString("direction")) {
+            case "SW": facingColumn = 0; break;
+            case "S": facingColumn = 1; break;
+            case "SE": facingColumn = 2; break;
+            case "E": facingColumn = 3; break;
+            case "NE": facingColumn = 4; break;
+            case "N": facingColumn = 5; break;
+            case "NW": facingColumn = 6; break;
+            case "W": facingColumn = 7; break;
+            default: throw new JSONException("Unknown native unit direction");
+        }
         name = unit.getString("unit_type_name");
         JSONArray visible = view.getJSONArray("visible_tiles");
         for (int i = 0; i < visible.length(); i++) tiles.add(new Tile(visible.getJSONObject(i)));

@@ -89,6 +89,7 @@ def main():
     assert initial['view']['turn'] == 1 and initial['view']['visible_tile_count']
     assert unit['unit_type_name'] == 'settler'
     assert initial['moves'][0]['destinations']
+    assert unit['direction'] == 'SE' and initial['settler_atlas_column'] == 2
     tap_tile()
     node(lambda n: '. Selected.' in n.get('content-desc', ''))
     # A two-tile destination must be refused without queueing future movement.
@@ -105,6 +106,9 @@ def main():
     assert not moved['result']['errors']
     assert moved['view']['known_units'][0]['position'] == destination
     assert sum('UnitMoved' in e for e in moved['result']['events']) == 1
+    facing = moved['view']['known_units'][0]['direction']
+    assert facing != 'SE', 'This seeded step must exercise a different facing before reset'
+    assert moved['settler_atlas_column'] == ['SW', 'S', 'SE', 'E', 'NE', 'N', 'NW', 'W'].index(facing)
     node(lambda n: f"at {destination['x']}, {destination['y']}. Selected." in n.get('content-desc', ''))
     tap_button('End Turn')
     ended, count = wait_state(pid, count)
@@ -116,9 +120,11 @@ def main():
     tap_button('New Game')
     reset, count = wait_state(pid, count)
     assert reset['view']['turn'] == 1
+    assert reset['view']['known_units'][0]['direction'] == 'SE'
+    assert reset['settler_atlas_column'] == 2
     assert reset['view']['known_units'][0]['position'] == unit['position']
     assert '. Selected.' not in map_node().get('content-desc')
-    print('PASS: New Game resets turn, unit and selection')
+    print('PASS: Initial/native facing, changed facing after movement, and New Game reset to SE/column 2')
     launch(missing=True)
     tap_button('Play' if args.imported else 'New Game')
     node(lambda n: n.get('text', '').startswith('Could not complete action.'))

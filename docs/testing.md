@@ -2,7 +2,7 @@
 
 ## Milestone 2
 
-Run the same Rust, inventory, source-policy, vendor-hash and Android build/lint gates below. Fourteen Rust tests now include synthetic GOG detection, required/optional-file handling, case resolution/collisions, symlink rejection, INI path restrictions, bounded malformed PCX/FLC failures and direction/ring-frame atlas behavior. CI needs no game data.
+Run the same Rust, inventory, source-policy, vendor-hash and Android build/lint gates below. Fifteen Rust tests now include synthetic GOG detection, required/optional-file handling, case resolution/collisions, symlink rejection, INI path restrictions, bounded malformed PCX/FLC failures, direction/ring-frame atlas behavior and native-facing reset after movement. CI needs no game data.
 
 For developer-local real data and a disposable ARM64 API-36 test emulator:
 
@@ -18,7 +18,7 @@ python3 scripts/android-smoke.py YOUR_SERIAL
 
 The import harness uses the actual system picker. It copies only profile files from the source into unique emulator `Documents/Civ3Touch-*` folders and tests valid, missing, unsupported and malformed variants, unchanged active data after failure, staging cleanup and process restart. **It replaces this app’s active import; use a disposable emulator, not an installation whose data you want to keep.** Input files stay untouched. Device test folders remain until the disposable session ends. The harness assumes an English phone-sized DocumentsUI with a Documents breadcrumb; it is not a portable test runner for every provider/locale. Do not upload game data or original-asset screenshots as test artifacts.
 
-`--imported` exercises touch selection, rejected distant moves, one valid move, end turn, reset, missing-rule diagnosis and recovery with installed original assets. Without it, the existing harness explicitly uses a debug-only synthetic launch extra. Normal app launches never bypass import.
+`--imported` exercises touch selection, rejected distant moves, one valid move, end turn, reset, missing-rule diagnosis and recovery with installed original assets. It also checks native direction and Android's parsed atlas column on initial launch, after movement and after New Game. Without it, the existing harness explicitly uses a debug-only synthetic launch extra. Normal app launches never bypass import.
 
 Manual checks: cancel folder selection; verify clean launch gates Play; inspect original terrain and animated Settler; toggle audio, move and inspect debug `AUDIO_*` events for decoder readiness, music start/pause and successful sound stream; background/resume; rotate; inspect phone/tablet/landscape and 1.5× text. Verify retained game state and import progress after configuration changes. Restore emulator display/settings afterwards. Actual listening, physical-device/API-26 and alternative-provider testing must be reported separately.
 

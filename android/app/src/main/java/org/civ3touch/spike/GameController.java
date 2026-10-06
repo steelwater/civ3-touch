@@ -95,6 +95,7 @@ final class GameController {
                     // Bounded acceptance evidence: full terrain can exceed logcat's line limit.
                     JSONObject evidence = new JSONObject(json);
                     JSONObject view = evidence.getJSONObject("view");
+                    evidence.put("settler_atlas_column", next.facingColumn);
                     evidence.put("view", new JSONObject()
                             .put("turn", view.getInt("turn"))
                             .put("known_units", view.getJSONArray("known_units"))

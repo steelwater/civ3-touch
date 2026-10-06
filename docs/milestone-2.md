@@ -45,7 +45,7 @@ The pinned PCX/FLIC decoders are behind header/size/structure checks; malformed 
 
 ## Verification and continuation
 
-Observed checks on the final implementation:
+Observed checks on the original PR implementation (follow-up evidence below):
 
 - Fourteen Rust tests pass (nine asset-boundary tests plus the five existing engine/smoke tests); own rustfmt and Clippy with warnings denied pass. Three synthetic inventory tests, source policy and all 115 vendor hashes pass.
 - The developer-local validator decodes five terrain samples and eight-direction idle/run atlases from the reference data, with both optional audio paths recognized.
@@ -61,3 +61,11 @@ The first media check found a pause-before-start error; playback now pauses only
 Unrun checks: physical hardware, API 26/16 KB-page devices, subjective audio listening, non-English/alternative document providers, forced low-space/permission-revocation/power-loss injection and full accessibility/fuzzing. No evidence from those checks is claimed. No gameplay or compatibility expansion beyond the documented slice. Google’s current [Android testing-setup skill](https://github.com/android/skills/blob/main/testing/testing-setup/SKILL.md) informed shared tests, device journeys, failure states and layout/lifecycle checks. Existing Rust and adb/UI Automator tools were reused; no DI, mocking, screenshot or coverage dependency was installed. Play, R8 and profiling skills are not applicable to this import slice.
 
 Rollback: changes remain on the feature branch; canonical `main`, source installation and installer remain unchanged. No vendor modifications, production deployment or release. Next gate is PR review and Captain playtesting; merge is separate.
+
+## PR follow-up: native Settler facing — 2026-10-06
+
+[PR feedback](https://github.com/steelwater/civ3-touch/pull/2#issuecomment-6006654131) identified that Android ignored `UnitSnapshot.direction`, started at S and inferred later facing from movement. `GameState` now maps the native direction to the FLC atlas column, and `MapView` reads that value directly. Movement deltas remain only for position interpolation. The engine and vendor code are unchanged.
+
+The new Rust regression verifies initial SE, changed native facing after movement and a fresh game's reset to SE. The imported-assets device journey also checks Android's parsed atlas column at each stage. All 15 Rust tests, rustfmt, Clippy, source policy and 115 vendor hashes pass; Android build/lint passes with the same five warnings. The imported touch/facing/error/recovery journey passes on the API-36 ARM64 phone emulator. Existing import and broader layout evidence above was not rerun for this narrow rendering fix.
+
+The updated development APK is installed in the playtest emulator; SHA-256: `c4f07b467bd0c4751ebcc349f7855e1fbd72ca9c60f3488ba92a16d799cb2fac`. Captain's earlier successful import/artwork playtest applies to the prior PR build; the facing fix awaits re-review. Latest-head CI evidence is recorded in the Drive handoff. Merge and release remain separate.

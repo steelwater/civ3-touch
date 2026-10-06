@@ -24,7 +24,7 @@ final class MapView extends View {
     private float downX, downY;
     private ImportedAssets assets;
     private long moveStarted;
-    private int moveDx, moveDy, direction = 1;
+    private int moveDx, moveDy;
     private final Rect source = new Rect();
     private final RectF destination = new RectF();
 
@@ -45,11 +45,6 @@ final class MapView extends View {
                 && next.unitMoved && (state.x != next.x || state.y != next.y)) {
             moveDx = next.x - state.x; moveDy = next.y - state.y;
             moveStarted = SystemClock.uptimeMillis();
-            int dx = Integer.signum(moveDx), dy = Integer.signum(moveDy);
-            if (dx == 0) direction = dy > 0 ? 0 : 4;
-            else if (dy == 0) direction = dx > 0 ? 2 : 6;
-            else if (dx > 0) direction = dy > 0 ? 1 : 3;
-            else direction = dy > 0 ? 7 : 5;
         } else if (next == null || state == null || (next != state && !next.unitMoved)) {
             moveStarted = 0;
         }
@@ -124,7 +119,7 @@ final class MapView extends View {
             int frameHeight = sprite.getHeight() / frames;
             int frameWidth = sprite.getWidth() / 8;
             int frame = (int) ((moving ? elapsed : SystemClock.uptimeMillis()) / delay % frames);
-            source.set(direction * frameWidth, frame * frameHeight, (direction + 1) * frameWidth, (frame + 1) * frameHeight);
+            source.set(state.facingColumn * frameWidth, frame * frameHeight, (state.facingColumn + 1) * frameWidth, (frame + 1) * frameHeight);
             if (moving) {
                 float remaining = 1 - (float) elapsed / (assets.runFrames * assets.runDelay);
                 cx -= (moveDx - moveDy) * halfWidth * remaining;
