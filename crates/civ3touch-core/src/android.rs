@@ -196,3 +196,60 @@ pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_imagePixels(
         }
     }
 }
+
+#[no_mangle]
+pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_command(
+    env: JNIEnv,
+    _: JClass,
+    request: JString,
+) -> jstring {
+    response(env, |env| {
+        let request: String = env.get_string(&request).map_err(|e| e.to_string())?.into();
+        let request = serde_json::from_str(&request).map_err(|e| e.to_string())?;
+        SESSION.with(|s| {
+            let mut slot = s.borrow_mut();
+            Ok(slot
+                .as_mut()
+                .ok_or("Start a new game first")?
+                .request(request)
+                .to_string())
+        })
+    })
+}
+#[no_mangle]
+pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_snapshot(
+    env: JNIEnv,
+    _: JClass,
+) -> jstring {
+    response(env, |_| {
+        SESSION.with(|s| {
+            Ok(s.borrow_mut()
+                .as_mut()
+                .ok_or("Start a new game first")?
+                .initial_snapshot()
+                .to_string())
+        })
+    })
+}
+#[no_mangle]
+pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_save(env: JNIEnv, _: JClass) -> jstring {
+    response(env, |_| {
+        SESSION.with(|s| s.borrow().as_ref().ok_or("Start a new game first")?.save())
+    })
+}
+#[no_mangle]
+pub extern "system" fn Java_org_civ3touch_spike_CoreBridge_load(
+    env: JNIEnv,
+    _: JClass,
+    rules: JString,
+    saved: JString,
+) -> jstring {
+    response(env, |env| {
+        let rules: String = env.get_string(&rules).map_err(|e| e.to_string())?.into();
+        let saved: String = env.get_string(&saved).map_err(|e| e.to_string())?.into();
+        let mut game = Session::load(Path::new(&rules), &saved)?;
+        let snapshot = game.initial_snapshot().to_string();
+        SESSION.with(|s| *s.borrow_mut() = Some(game));
+        Ok(snapshot)
+    })
+}

@@ -1,6 +1,12 @@
 # Android/Rust integration
 
-## Milestone 1 extension (2026-10-05)
+## Milestone 3 extension (2026-10-06)
+
+The [Milestone 3 record](milestone-3.md) supersedes the historical single-player and no-save limits below. The retained single-worker controller and thread-local Rust session remain. JNI adds general legal command submission, snapshot, save and transactional load operations. Rust runs a two-civilization game, the existing AI, pending city production queues and versioned replay validation. Android owns unit selection, native action menus, city/unit/improvement drawing, and atomic app-private manual/recovery file slots. The Milestone 2 importer, validation, terrain/Settler art and audio path are preserved.
+
+Recovery is committed after each completed action, before the new state reaches the screen. Process restart offers explicit manual/recovery loading after import validation. Failed load leaves the existing native session intact; failed persistence is visible and keeps the user in the live session. Exact rules content and the engine/session contract must match before replay. No saved rules path is trusted, and no engine is shared across threads. See [testing.md](testing.md) for device journeys and [milestone-3.md](milestone-3.md) for the approved persistence decision and limitations.
+
+## Historical Milestone 1 extension (2026-10-05)
 
 Canonical [Milestone 1 brief](https://docs.google.com/document/d/1zmHPomRr53cus_xb0WnbSXfWid9S9STP8YGHWO4kGG0/edit). The existing Java/JNI spike is extended without new dependencies or vendor edits. `GameController` owns a single executor. Its Rust thread-local `Session` owns the engine and Lua; JNI exposes new-game, one-step movement, end-turn and close operations. There are no raw engine pointers or cross-thread engine transfers. JSON carries the upstream player view, immediate move options and command results to Java.
 

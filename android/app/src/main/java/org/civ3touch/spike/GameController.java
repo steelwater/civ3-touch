@@ -18,6 +18,7 @@ final class GameController {
     interface Listener { void changed(); }
     interface NativeAction { String run() throws IOException; }
     private final Context context;
+    private final GameSaves saves;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     Listener listener;
@@ -25,6 +26,7 @@ final class GameController {
     boolean busy, selected;
     String error = "";
     private boolean closed;
+    private long debugSequence;
     ImportedAssets assets;
     String progress = "";
     boolean audioEnabled, foreground;
@@ -34,6 +36,7 @@ final class GameController {
     GameController(Context context, boolean prototype) {
         this.context = context.getApplicationContext();
         this.prototype = prototype;
+        this.saves = new GameSaves(context, prototype);
         if (!prototype) loadImport(null);
     }
 
@@ -77,35 +80,71 @@ final class GameController {
     }
     void move(int x, int y) {
         GameState current = state;
-        if (current != null) execute(() -> CoreBridge.moveUnit(current.index, current.generation, x, y), false);
+        if (current != null && current.index >= 0) execute(() -> CoreBridge.moveUnit(current.index, current.generation, x, y), false);
     }
     void endTurn() { execute(CoreBridge::endTurn, false); }
 
-    private void execute(NativeAction action, boolean resetSelection) {
+    void command(String request) { execute(() -> CoreBridge.command(request), false); }
+    void selectUnit(JSONObject unit) {
+        if (state == null || busy) return;
+        try {
+            JSONObject id = unit.getJSONObject("id");
+            state = new GameState(state.json, id.getInt("index"), id.getInt("generation"));
+            selected = true; notifyChanged();
+        } catch (org.json.JSONException failure) { error = failure.getMessage(); notifyChanged(); }
+    }
+    void saveGame() {
+        execute(() -> { saves.write(false, CoreBridge.save()); return CoreBridge.snapshot(); }, false, "Game saved.");
+    }
+    void loadGame(boolean recovery) {
+        if (assets == null && !prototype) return;
+        execute(() -> {
+            File rules = new File(context.getFilesDir(), "base");
+            copyRules(rules);
+            return CoreBridge.load(rules.getPath(), saves.read(recovery));
+        }, true, "Saved game loaded.");
+    }
+    private void execute(NativeAction action, boolean resetSelection) { execute(action, resetSelection, ""); }
+    private void execute(NativeAction action, boolean resetSelection, String successMessage) {
         if (busy || closed) return;
         busy = true;
         progress = context.getString(R.string.working);
         error = "";
         notifyChanged();
+        int selectedIndex = resetSelection || state == null ? -1 : state.index;
+        int selectedGeneration = resetSelection || state == null ? -1 : state.generation;
         worker.execute(() -> {
             try {
                 String json = action.run();
-                GameState next = new GameState(json);
-                if (BuildConfig.DEBUG) {
+                GameState next = new GameState(json, selectedIndex, selectedGeneration);
+                String saveFailure = "";
+                try { saves.write(true, CoreBridge.save()); }
+                catch (IOException | RuntimeException failure) { saveFailure = "Recovery save failed: " + failure.getMessage() + ". Keep the app open and retry Save game."; }
+                String saveFeedback = saveFailure;
+                if (BuildConfig.DEBUG) try {
+                    android.util.AtomicFile debug = new android.util.AtomicFile(new File(context.getFilesDir(), "debug-state.json"));
+                    FileOutputStream stream = debug.startWrite();
+                    try { stream.write(new JSONObject(json).put("_sequence", ++debugSequence).toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)); debug.finishWrite(stream); }
+                    catch (IOException failure) { debug.failWrite(stream); throw failure; }
                     // Bounded acceptance evidence: full terrain can exceed logcat's line limit.
                     JSONObject evidence = new JSONObject(json);
                     JSONObject view = evidence.getJSONObject("view");
                     evidence.put("settler_atlas_column", next.facingColumn);
+                    evidence.remove("available");
                     evidence.put("view", new JSONObject()
                             .put("turn", view.getInt("turn"))
                             .put("known_units", view.getJSONArray("known_units"))
                             .put("visible_tile_count", view.getJSONArray("visible_tiles").length()));
-                    Log.i("Civ3Touch", "GAME_STATE " + evidence);
+                    if (evidence.toString().length() < 3900) Log.i("Civ3Touch", "GAME_STATE " + evidence);
+                    else Log.i("Civ3Touch", "GAME_STATE_FILE sequence=" + debugSequence);
+                } catch (IOException | org.json.JSONException failure) {
+                    Log.e("Civ3Touch", "Debug evidence unavailable: " + failure.getClass().getSimpleName());
                 }
                 main.post(() -> {
                     if (closed) return;
                     boolean moved = next.unitMoved;
                     state = next;
+                    error = saveFeedback.isEmpty() ? successMessage : saveFeedback;
                     updateAudio();
                     if (moved) audio.step();
                     if (resetSelection) selected = false;
@@ -116,7 +155,7 @@ final class GameController {
                 Log.e("Civ3Touch", "GAME_FAIL " + failure.getClass().getSimpleName());
                 main.post(() -> {
                     if (closed) return;
-                    error = "Could not complete action. Try New Game. " + failure.getMessage();
+                    error = "Could not complete action. " + failure.getMessage() + ". Existing saves are retained.";
                     busy = false;
                     notifyChanged();
                 });

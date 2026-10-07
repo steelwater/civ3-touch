@@ -1,11 +1,13 @@
 <resources>
+    <string name="actions">Actions</string>
+    <string name="game_over">Game over. Winner: player %1$d.</string>
     <string name="app_name">Civ3Touch</string>
     <string name="new_game">New Game</string>
     <string name="end_turn">End Turn</string>
     <string name="working">Working…</string>
     <string name="welcome">Import your English GOG Civilization III Complete folder (2.0.0.7) to Play. Select the root containing Art, Text, Conquests and the GOG .info file. No game data is included.</string>
-    <string name="select_unit">Tap your Settler to select it.</string>
-    <string name="selected">Settler selected at %1$d, %2$d. Movement: %3$.1f.</string>
+    <string name="select_unit">Tap a unit to select it. Actions lists units, cities and research.</string>
+    <string name="selected">Unit selected at %1$d, %2$d. Movement: %3$.1f.</string>
     <string name="choose_tile">Tap a gold tile to move.</string>
     <string name="no_step">No step available. End Turn to refresh movement.</string>
     <string name="game_status">Turn %1$d · %2$s\n%3$s End Turn skips unused movement.</string>
@@ -13,5 +15,5 @@
     <string name="play">Play</string>
     <string name="audio_on">Audio on</string>
     <string name="audio_off">Audio off</string>
-    <string name="import_ready">GOG data imported. Tap Play. Five original terrain types and Settler idle/run are supported; other terrain and vegetation use prototype markers. Audio is optional. No saves.</string>
+    <string name="import_ready">GOG data imported. Tap Play. Five original terrain types and Settler idle/run are supported; other terrain and vegetation use prototype markers. Audio is optional. Tap Actions to resume a recovery save or load a saved game.</string>
 </resources>
