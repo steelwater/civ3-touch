@@ -102,18 +102,20 @@ final class GameState {
             Object error = errors.get(0);
             feedback = error instanceof JSONObject ? ((JSONObject) error).getString("Custom") : error.toString();
         } else {
+            List<String> completions = new ArrayList<>();
             JSONArray events = result.getJSONArray("events");
             for (int i = 0; i < events.length(); i++) {
                 JSONObject event = events.getJSONObject(i);
                 if (event.has("UnitMoved")) { feedback = "Moved one tile."; moved = true; }
                 if (event.has("TurnStarted")) feedback = "Turn advanced.";
                 if (event.has("CityFounded")) feedback = "Founded " + event.getJSONObject("CityFounded").getString("name") + ".";
-                if (event.has("ProductionComplete")) feedback = "Produced " + event.getJSONObject("ProductionComplete").getString("item_name") + ".";
-                if (event.has("TechResearched")) feedback = "Research complete: " + event.getJSONObject("TechResearched").getString("tech_id").replace('_', ' ') + ".";
-                if (event.has("ActionCompleted")) feedback = "Completed " + event.getJSONObject("ActionCompleted").getString("action_id").replace('_', ' ') + ".";
+                if (event.has("ProductionComplete")) completions.add("Produced " + event.getJSONObject("ProductionComplete").getString("item_name") + ".");
+                if (event.has("TechResearched")) completions.add("Research complete: " + event.getJSONObject("TechResearched").getString("tech_id").replace('_', ' ') + ".");
+                if (event.has("ActionCompleted")) completions.add("Completed " + event.getJSONObject("ActionCompleted").getString("action_id").replace('_', ' ') + ".");
                 if (event.has("CombatResolved")) feedback = "Combat resolved. Surviving unit has " + event.getJSONObject("CombatResolved").getInt("winner_hp") + " HP.";
                 if (event.has("MoveBlocked")) feedback = "Move blocked: " + event.getJSONObject("MoveBlocked").getString("reason");
             }
+            if (!completions.isEmpty()) feedback = String.join("\n", completions);
         }
         message = feedback;
         unitMoved = moved;

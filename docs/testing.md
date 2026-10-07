@@ -9,12 +9,15 @@ On a disposable ARM64 emulator with the reviewed debug APK:
 ```sh
 python3 scripts/android-import-acceptance.py YOUR_SERIAL local-data/gog/app
 python3 scripts/android-loop-acceptance.py YOUR_SERIAL --imported
+python3 scripts/android-review-acceptance.py YOUR_SERIAL
 python3 scripts/android-acceptance.py YOUR_SERIAL --imported
 python3 scripts/android-acceptance.py YOUR_SERIAL
 python3 scripts/android-smoke.py YOUR_SERIAL
 ```
 
 The loop harness performs actual touch/menu commands for movement, city founding, production and queueing, research, Worker roads, exploration and combat. It asserts engine snapshots from a debug-only app-private file; it never injects simulation state. It then verifies separate manual/recovery saves, force-stop/relaunch, background/resume and continued play. It overwrites this disposable app's manual/recovery slots. Omit `--imported` only for the explicit debug synthetic mode. Neither debug mechanism exists as a normal-launch import bypass.
+
+The focused review harness checks positive shield overflow into queued Worker production, actual Android status text for production/research/Worker completion, exclusion of AI research/turn-start events, and New Game → Save → Load with continued deterministic play. It uses real touch actions and read-only snapshots. Its default synthetic mode uses separate save slots; `--imported` instead overwrites normal slots and is only for a disposable playthrough. Research and production can complete together; all completion messages must remain visible in the scrollable status.
 
 Manual review remains required: inspect new city/unit/improvement markers, menu readability, mine/irrigation use, responsive phone/tablet/landscape and 1.5× text, rotation retention, and save error recovery. Restore emulator settings after checks. The [Milestone 3 record](milestone-3.md) provides the Captain's post-review playtest sequence and limits. Automated emulator evidence does not complete that acceptance gate.
 

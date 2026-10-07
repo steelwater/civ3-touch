@@ -3,7 +3,7 @@ use fc3_core::ai::{Agent, SimpleAgent};
 use fc3_core::city::ProductionItem;
 use fc3_core::engine::{Engine, GameConfig};
 use fc3_core::id::{CityId, UnitId};
-use fc3_core::protocol::{AvailableCommand, Command, CommandResult, GameError};
+use fc3_core::protocol::{AvailableCommand, Command, CommandResult, Event, GameError};
 use fc3_core::types::{PlayerId, TileCoord};
 use fc3_core::world::WorldConfig;
 use serde_json::{json, Value};
@@ -12,7 +12,7 @@ use std::path::Path;
 const PLAYER: PlayerId = PlayerId(0);
 const SAVE_VERSION: u64 = 1;
 // Change this contract whenever the rules, session policy or engine version changes.
-const RULESET: &str = "freec3-90fc7ee-civ3touch-m3-v1";
+const RULESET: &str = "freec3-90fc7ee-civ3touch-m3-v2";
 const MAX_ACTIONS: usize = 20_000;
 pub const MAX_SAVE_BYTES: usize = 16 * 1024 * 1024;
 
@@ -261,6 +261,14 @@ impl Session {
                 },
             );
             if applied.is_ok() {
+                if completed.contains(&city.id) {
+                    // Queue advancement is continuation, not a manual change. Keep
+                    // the overflow FreeC3 retained before auto-selecting its next item.
+                    let world = self.engine.world();
+                    let mut world = world.borrow_mut();
+                    let index = world.cities.get(city.id).unwrap();
+                    world.cities.shield_stockpile[index] = city.shield_stockpile.unwrap();
+                }
                 self.queues[index].1.remove(0);
             }
             result.events.extend(applied.events);
@@ -288,11 +296,20 @@ impl Session {
         if !human.is_ok() {
             return human;
         }
+        // Research completes at human turn-end, before AI turn-start events.
+        let research: Vec<_> = human
+            .events
+            .iter()
+            .filter(
+                |event| matches!(event, Event::TechResearched { player, .. } if *player == PLAYER),
+            )
+            .cloned()
+            .collect();
         // Restart the existing AI from the current world RNG each round. Its future
         // decisions depend only on replayed state, not an unsaved private RNG stream.
         let rng = self.engine.world().borrow().rng.clone();
         let mut ai = SimpleAgent::new(rng);
-        let mut last = CommandResult::with_events(vec![]);
+        let mut last = human;
         for _ in 0..256 {
             let player = self.engine.current_player();
             if player == PLAYER || self.engine.is_game_over().is_some() {
@@ -327,6 +344,11 @@ impl Session {
         } else {
             last.events.clear();
         }
+        // The final AI EndTurn may also contain AI research. Replace research
+        // events with only the human completion retained above.
+        last.events
+            .retain(|event| !matches!(event, Event::TechResearched { .. }));
+        last.events.splice(0..0, research);
         let completed: Vec<_> = last
             .events
             .iter()
@@ -531,6 +553,102 @@ mod playable_tests {
         restored
     }
     #[test]
+    fn queued_production_keeps_completion_overflow_but_manual_changes_reset_shields() {
+        let mut game = game();
+        action(&mut game, "build_city");
+        let city = game.engine.player_view(PLAYER).own_cities[0].id;
+        let options = game
+            .engine
+            .available_commands(PLAYER)
+            .into_iter()
+            .find_map(|a| match a {
+                AvailableCommand::SetProduction { options, .. } => Some(options),
+                _ => None,
+            })
+            .unwrap();
+        let warrior = options
+            .iter()
+            .find(|o| o.name == "warrior")
+            .unwrap()
+            .item
+            .clone();
+        let worker = options
+            .iter()
+            .find(|o| o.name == "worker")
+            .unwrap()
+            .item
+            .clone();
+        game.request(json!(Command::SetProduction {
+            city_id: city,
+            item: warrior.clone()
+        }));
+        game.request(json!({"QueueProduction": {"city_id": city, "item": worker}}));
+        // Arrange an exact three-shield overflow at this turn's completion.
+        let view = game.engine.player_view(PLAYER).own_cities.remove(0);
+        {
+            let world = game.engine.world();
+            let mut world = world.borrow_mut();
+            let index = world.cities.get(city).unwrap();
+            world.cities.shield_stockpile[index] =
+                view.production_cost.unwrap() - view.shields_per_turn.unwrap() + 3;
+        }
+        let result = game.end_turn();
+        assert_eq!(result["result"]["errors"], json!([]));
+        assert!(result["result"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e.get("ProductionComplete").is_some()));
+        let view = game.engine.player_view(PLAYER).own_cities.remove(0);
+        assert_eq!(view.producing.as_deref(), Some("worker"));
+        assert_eq!(view.shield_stockpile, Some(3));
+        assert!(game.queues[0].1.is_empty());
+        game.request(json!(Command::SetProduction {
+            city_id: city,
+            item: warrior
+        }));
+        assert_eq!(
+            game.engine.player_view(PLAYER).own_cities[0].shield_stockpile,
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn simultaneous_human_and_ai_research_only_reports_the_human_completion() {
+        let mut game = game();
+        action(&mut game, "build_city");
+        game.end_turn();
+        {
+            let world = game.engine.world();
+            let mut world = world.borrow_mut();
+            let cost = world.tech_registry.get("bronze_working").unwrap().cost;
+            for player in &mut world.players {
+                player.researching = Some("bronze_working".into());
+                player.science = cost;
+            }
+        }
+        let result = game.end_turn();
+        assert_eq!(result["result"]["errors"], json!([]));
+        for player in [PLAYER, PlayerId(1)] {
+            assert!(game
+                .engine
+                .player_view(player)
+                .researched_techs
+                .contains(&"bronze_working".into()));
+        }
+        let research: Vec<_> = result["result"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|event| event.get("TechResearched"))
+            .collect();
+        assert_eq!(
+            research,
+            vec![&json!({"player": PLAYER, "tech_id": "bronze_working"})]
+        );
+    }
+
+    #[test]
     fn economy_workers_research_and_queued_units_survive_reload_and_continue() {
         let mut game = game();
         action(&mut game, "build_city");
@@ -569,9 +687,26 @@ mod playable_tests {
             .iter()
             .filter(|u| u.owner == PLAYER)
             .count();
+        let mut research_completed = false;
+        let mut production_completed = false;
+        let mut worker_completed = false;
         for _ in 0..45 {
-            assert_eq!(game.end_turn(), restored.end_turn());
+            let result = game.end_turn();
+            assert_eq!(result, restored.end_turn());
+            for event in result["result"]["events"].as_array().unwrap() {
+                if let Some(research) = event.get("TechResearched") {
+                    assert_eq!(research["player"], json!(PLAYER));
+                    assert_eq!(research["tech_id"], "bronze_working");
+                    research_completed = true;
+                }
+                if let Some(turn) = event.get("TurnStarted") {
+                    assert_eq!(turn["player"], json!(PLAYER));
+                }
+                production_completed |= event.get("ProductionComplete").is_some();
+                worker_completed |= event.get("ActionCompleted").is_some();
+            }
         }
+        assert!(research_completed && production_completed && worker_completed);
         let view = game.engine.player_view(PLAYER);
         assert!(view.researched_techs.contains(&"bronze_working".into()));
         assert!(view.visible_tiles.iter().any(|t| t.road_level > 0));
@@ -694,6 +829,7 @@ mod playable_tests {
         for (key, value) in [
             ("version", json!(99)),
             ("ruleset", json!("future")),
+            ("ruleset", json!("freec3-90fc7ee-civ3touch-m3-v1")),
             ("rules", json!({})),
             ("world", json!({})),
             ("journal", json!([])),
