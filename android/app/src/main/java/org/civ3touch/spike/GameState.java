@@ -23,7 +23,8 @@ final class GameState {
         }
     }
     final int turn, width, height, index, generation, x, y, movement, attack;
-    final String name, message;
+    final String name, message, researchName;
+    final int gold, goldPerTurn, science, sciencePerTurn;
     final int facingColumn;
     final boolean unitMoved;
     final String json;
@@ -38,6 +39,9 @@ final class GameState {
         this.json = json;
         root = new JSONObject(json);
         view = root.getJSONObject("view");
+        gold = view.getInt("gold"); goldPerTurn = view.getInt("gold_per_turn");
+        science = view.getInt("science"); sciencePerTurn = view.getInt("science_per_turn");
+        researchName = view.isNull("researching_name") ? "none" : view.getString("researching_name");
         units = view.getJSONArray("known_units");
         cities = view.getJSONArray("own_cities");
         available = root.getJSONArray("available");

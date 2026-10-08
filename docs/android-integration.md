@@ -1,5 +1,9 @@
 # Android/Rust integration
 
+## Milestone 4 interface (2026-10-08)
+
+`MapCamera` holds only retained viewport coordinates and zoom. `MapView` uses Android gesture detectors to distinguish pan/pinch/long-press from tap commands; input projection uses the same camera as drawing. `TouchUi` supplies large buttons and scrollable screens, while `GameMenus` populates the unit sheet and city/research controls from the existing snapshots and available commands. No native protocol, save or vendor change is involved. The known-map diplomacy presentation is read-only because the protocol exposes no diplomacy state or commands. See [Milestone 4](milestone-4.md) for interaction precedence, lifecycle tradeoffs and acceptance evidence.
+
 ## Milestone 3 extension (2026-10-06)
 
 The [Milestone 3 record](milestone-3.md) supersedes the historical single-player and no-save limits below. The retained single-worker controller and thread-local Rust session remain. JNI adds general legal command submission, snapshot, save and transactional load operations. Rust runs a two-civilization game, the existing AI, pending city production queues and versioned replay validation. Android owns unit selection, native action menus, city/unit/improvement drawing, and atomic app-private manual/recovery file slots. The Milestone 2 importer, validation, terrain/Settler art and audio path are preserved.

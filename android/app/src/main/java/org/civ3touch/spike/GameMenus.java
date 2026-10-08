@@ -1,7 +1,6 @@
 package org.civ3touch.spike;
 
-import android.app.Activity;
-import android.app.AlertDialog;
+import android.widget.LinearLayout;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
@@ -10,15 +9,15 @@ import java.util.List;
 
 /** Small native menus over engine-advertised commands, without duplicating game rules. */
 final class GameMenus {
-    private final Activity activity;
+    private final MainActivity activity;
     private final GameController controller;
     private final List<String> labels = new ArrayList<>();
     private final List<Runnable> actions = new ArrayList<>();
-    GameMenus(Activity activity, GameController controller) { this.activity = activity; this.controller = controller; }
+    GameMenus(MainActivity activity, GameController controller) { this.activity = activity; this.controller = controller; }
     private void add(String label, Runnable action) { labels.add(label); actions.add(action); }
-    private void show(String title) {
-        new AlertDialog.Builder(activity).setTitle(title).setItems(labels.toArray(new String[0]),
-                (dialog, which) -> actions.get(which).run()).setNegativeButton("Close", null).show();
+    private void show(String title) { show(title, ""); }
+    private void show(String title, String details) {
+        TouchUi.screen(activity, title, details, labels, actions);
     }
     private void send(String type, JSONObject value) {
         try { controller.command(new JSONObject().put(type, value).toString()); }
@@ -31,43 +30,104 @@ final class GameMenus {
             add("Choose unit", () -> new GameMenus(activity, controller).units());
             add("Cities and production", () -> new GameMenus(activity, controller).cities());
             add("Research", () -> new GameMenus(activity, controller).research());
-            try {
-                for (int i = 0; i < state.available.length(); i++) {
-                    JSONObject entry = state.available.optJSONObject(i);
-                    if (entry == null) continue;
-                    if (entry.has("UnitAction")) {
-                        JSONObject a = entry.getJSONObject("UnitAction");
-                        if (selected(a.getJSONObject("unit_id"))) {
-                            JSONObject command = new JSONObject().put("unit_id", a.getJSONObject("unit_id")).put("action_id", a.getString("action_id"));
-                            add(a.getString("name"), () -> send("PerformAction", command));
-                        }
-                    }
-                    if (entry.has("Attack") && state.attack > 0) {
-                        JSONObject a = entry.getJSONObject("Attack");
-                        if (selected(a.getJSONObject("unit_id"))) {
-                            JSONArray targets = a.getJSONArray("targets");
-                            for (int j = 0; j < targets.length(); j++) {
-                                JSONObject target = targets.getJSONObject(j);
-                                JSONObject command = new JSONObject().put("attacker", a.getJSONObject("unit_id")).put("defender", target);
-                                add("Attack enemy " + target.getInt("index"), () -> send("AttackUnit", command));
-                            }
-                        }
-                    }
-                    for (String kind : new String[]{"Skip", "Fortify"}) {
-                        if (entry.has(kind)) {
-                            JSONObject command = entry.getJSONObject(kind);
-                            if (selected(command.getJSONObject("unit_id"))) add(kind + " unit", () -> send(kind + "Unit", command));
-                        }
-                    }
-                }
-            } catch (JSONException failure) { fail(failure); }
+            add("Diplomacy", () -> new GameMenus(activity, controller).diplomacy());
+            add("Selected unit actions", () -> new GameMenus(activity, controller).unitScreen());
             add("Save game", controller::saveGame);
+            add("Game settings", activity::gameSettings);
         }
         if (controller.assets != null || controller.prototype) {
             add("Load saved game", () -> controller.loadGame(false));
             add("Resume recovery save", () -> controller.loadGame(true));
         }
         show(state == null ? "Game" : state.name + " — actions");
+    }
+    private void unitActions() {
+        GameState state = controller.state;
+        if (state == null || state.index < 0) return;
+        try {
+            for (int i = 0; i < state.available.length(); i++) {
+                JSONObject entry = state.available.optJSONObject(i);
+                if (entry == null) continue;
+                if (entry.has("UnitAction")) {
+                    JSONObject a = entry.getJSONObject("UnitAction");
+                    if (selected(a.getJSONObject("unit_id"))) {
+                        JSONObject command = new JSONObject().put("unit_id", a.getJSONObject("unit_id")).put("action_id", a.getString("action_id"));
+                        add(a.getString("name"), () -> send("PerformAction", command));
+                    }
+                }
+                if (entry.has("Attack") && state.attack > 0) {
+                    JSONObject a = entry.getJSONObject("Attack");
+                    if (selected(a.getJSONObject("unit_id"))) {
+                        JSONArray targets = a.getJSONArray("targets");
+                        for (int j = 0; j < targets.length(); j++) {
+                            JSONObject target = targets.getJSONObject(j);
+                            JSONObject command = new JSONObject().put("attacker", a.getJSONObject("unit_id")).put("defender", target);
+                            add("Attack enemy " + target.getInt("index"), () -> send("AttackUnit", command));
+                        }
+                    }
+                }
+            }
+            // Put unit-specific work first; common wait/defence commands follow.
+            for (int i = 0; i < state.available.length(); i++) {
+                JSONObject entry = state.available.optJSONObject(i);
+                if (entry == null) continue;
+                for (String kind : new String[]{"Skip", "Fortify"}) {
+                    if (entry.has(kind)) {
+                        JSONObject command = entry.getJSONObject(kind);
+                        if (selected(command.getJSONObject("unit_id"))) add(kind + " unit", () -> send(kind + "Unit", command));
+                    }
+                }
+            }
+        } catch (JSONException failure) { fail(failure); }
+    }
+    void unitSheet(LinearLayout content) {
+        unitActions();
+        if (labels.isEmpty()) content.addView(TouchUi.text(activity, "No available commands. Select another unit or end the turn.", 16));
+        for (int i = 0; i < labels.size(); i++) {
+            android.widget.Button button = TouchUi.button(activity, labels.get(i), actions.get(i));
+            button.setEnabled(!controller.busy);
+            content.addView(button);
+        }
+    }
+    void unitScreen() { unitActions(); show("Selected unit actions"); }
+    void diplomacy() {
+        java.util.Set<Integer> owners = new java.util.TreeSet<>();
+        GameState state = controller.state;
+        try {
+            for (int i = 0; i < state.units.length(); i++) {
+                int owner = state.units.getJSONObject(i).getInt("owner");
+                if (owner != state.view.getInt("player")) owners.add(owner);
+            }
+            for (JSONObject city : state.displayedCities) {
+                int owner = city.getInt("owner");
+                if (owner != state.view.getInt("player")) owners.add(owner);
+            }
+        } catch (JSONException failure) { fail(failure); return; }
+        String details = owners.isEmpty() ? "No other civilization appears in your current known map information. Explore to find other units and cities."
+                : "Other civilizations in your known map information: " + owners + ".";
+        show("Diplomacy", details + "\n\nDiplomatic negotiations are not available in this prototype. Peace, treaties and alliances are not supported yet. Return to the map to continue exploring.");
+    }
+    void tile(int x, int y) {
+        GameState state = controller.state;
+        try {
+            for (JSONObject city : state.displayedCities) {
+                JSONObject pos = city.getJSONObject("position");
+                if (pos.getInt("x") == x && pos.getInt("y") == y && city.getInt("owner") == state.view.getInt("player"))
+                    add("Open " + city.getString("name"), () -> new GameMenus(activity, controller).city(city));
+            }
+            for (JSONObject unit : state.ownUnits) {
+                JSONObject pos = unit.getJSONObject("position");
+                if (pos.getInt("x") == x && pos.getInt("y") == y)
+                    add("Select " + unit.getString("unit_type_name") + " #" + unit.getJSONObject("id").getInt("index"), () -> {
+                        controller.unitExpanded = true; controller.selectUnit(unit);
+                    });
+            }
+            String details = "Unexplored tile";
+            for (GameState.Tile tile : state.tiles) if (tile.x == x && tile.y == y)
+                details = tile.terrain + " • " + tile.vegetation + "\n" + tile.visibility
+                        + (tile.road > 0 ? " • Road" : "") + " " + tile.improvement;
+            show("Tile " + x + ", " + y, details);
+        } catch (JSONException failure) { fail(failure); }
     }
     private boolean selected(JSONObject id) throws JSONException {
         return id.getInt("index") == controller.state.index && id.getInt("generation") == controller.state.generation;
@@ -96,7 +156,7 @@ final class GameMenus {
         } catch (JSONException failure) { fail(failure); }
         show(labels.isEmpty() ? "Found a city with a Settler first" : "Cities");
     }
-    private void city(JSONObject city) {
+    void city(JSONObject city) {
         try {
             JSONObject id = city.getJSONObject("id");
             add("Choose production (changing item resets shields)", () -> new GameMenus(activity, controller).production(id, false));
@@ -120,9 +180,7 @@ final class GameMenus {
                     + "\nProducing: " + city.optString("producing", "none")
                     + "\nBuildings: " + city.getJSONArray("buildings")
                     + "\nQueue: " + (pending.isEmpty() ? "empty" : String.join(", ", pending));
-            add("City details", () -> new AlertDialog.Builder(activity).setTitle("City details")
-                    .setMessage(details).setPositiveButton("Close", null).show());
-            show(city.getString("name") + " • population " + city.getInt("population"));
+            show(city.getString("name") + " • population " + city.getInt("population"), details);
         } catch (JSONException failure) { fail(failure); }
     }
     private static boolean sameId(JSONObject a, JSONObject b) throws JSONException {
@@ -178,8 +236,8 @@ final class GameMenus {
                     + "\nScience " + state.view.getInt("science") + " (+" + state.view.getInt("science_per_turn") + "/turn)"
                     + "\nTurns left: " + state.view.optString("research_turns_left", "—")
                     + "\nCompleted: " + state.view.getJSONArray("researched_techs");
-            add("Research status", () -> new AlertDialog.Builder(activity).setTitle("Research status")
-                    .setMessage(details).setPositiveButton("Close", null).show());
+            add("Research status", () -> TouchUi.screen(activity, "Research status", details,
+                    java.util.Collections.emptyList(), java.util.Collections.emptyList()));
             show(labels.size() == 1 ? "Research in progress or unavailable" : "Choose research");
         } catch (JSONException failure) { fail(failure); }
     }
