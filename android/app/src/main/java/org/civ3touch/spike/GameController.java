@@ -27,6 +27,8 @@ final class GameController {
     boolean informationExpanded, unitExpanded = true;
     final MapCamera camera = new MapCamera();
     String error = "";
+    java.util.Map<String, String> slotDescriptions = new java.util.HashMap<>();
+    java.util.List<String> autoSlots = new java.util.ArrayList<>();
     private boolean closed;
     private long debugSequence;
     ImportedAssets assets;
@@ -98,12 +100,63 @@ final class GameController {
     void saveGame() {
         execute(() -> { saves.write(false, CoreBridge.save()); return CoreBridge.snapshot(); }, false, "Game saved.");
     }
-    void loadGame(boolean recovery) {
+    void inspectSaves(Runnable ready) {
+        if (busy || closed) return;
+        busy = true; progress = "Reading save slots…"; notifyChanged();
+        worker.execute(() -> {
+            java.util.Map<String, String> descriptions = new java.util.HashMap<>();
+            java.util.List<String> automatic = saves.autosaves();
+            for (String name : new String[]{"quick", "manual", "recovery"}) descriptions.put(name, saves.describe(name));
+            for (String name : automatic) descriptions.put(name, saves.describe(name));
+            main.post(() -> {
+                if (closed) return;
+                slotDescriptions = descriptions; autoSlots = automatic;
+                busy = false; notifyChanged(); ready.run();
+            });
+        });
+    }
+
+    void quickSave() {
+        execute(() -> { saves.write("quick", CoreBridge.save()); return CoreBridge.snapshot(); }, false, "Quick Save complete.");
+    }
+    void importSave(Uri source) {
+        if (assets == null && !prototype) { error = "Import game artwork before loading a native save."; notifyChanged(); return; }
+        execute(() -> {
+            String value;
+            try (InputStream input = context.getContentResolver().openInputStream(source)) { value = SaveFiles.read(input); }
+            File rules = new File(context.getFilesDir(), "base");
+            copyRules(rules);
+            return CoreBridge.load(rules.getPath(), value);
+        }, true, "Native save imported. Manual and Quick Save slots are unchanged.");
+    }
+    void exportSave(Uri destination) {
+        if (state == null) { error = "Export cancelled: reload your game before exporting."; notifyChanged(); return; }
+        execute(() -> {
+            String value = CoreBridge.save();
+            byte[] bytes = SaveFiles.bytes(value);
+            try (java.io.OutputStream output = context.getContentResolver().openOutputStream(destination, "wt")) {
+                if (output == null) throw new IOException("Document provider did not open the destination");
+                output.write(bytes);
+                output.flush();
+            }
+            try (InputStream input = context.getContentResolver().openInputStream(destination)) {
+                if (!SaveFiles.read(input).equals(value)) throw new IOException("Export readback differs from the saved game");
+            }
+            return CoreBridge.snapshot();
+        }, false, "Native save exported. Readback verified; keep private saves as an additional backup.");
+    }
+    void loadGame(boolean recovery) { loadSlot(recovery ? "recovery" : "manual"); }
+    void loadSlot(String name) {
         if (assets == null && !prototype) return;
         execute(() -> {
             File rules = new File(context.getFilesDir(), "base");
             copyRules(rules);
-            return CoreBridge.load(rules.getPath(), saves.read(recovery));
+            String value;
+            try { value = saves.read(name); }
+            catch (java.io.FileNotFoundException failure) {
+                throw new IOException("No saved game in the " + name + " slot yet", failure);
+            }
+            return CoreBridge.load(rules.getPath(), value);
         }, true, "Saved game loaded.");
     }
     private void execute(NativeAction action, boolean resetSelection) { execute(action, resetSelection, ""); }
@@ -113,6 +166,9 @@ final class GameController {
         progress = context.getString(R.string.working);
         error = "";
         notifyChanged();
+        int previousTurn = state == null ? -1 : state.turn;
+        int cadence = QolSettings.cadence(context);
+        int retention = QolSettings.retention(context);
         int selectedIndex = resetSelection || state == null ? -1 : state.index;
         int selectedGeneration = resetSelection || state == null ? -1 : state.generation;
         worker.execute(() -> {
@@ -120,8 +176,13 @@ final class GameController {
                 String json = action.run();
                 GameState next = new GameState(json, selectedIndex, selectedGeneration);
                 String saveFailure = "";
-                try { saves.write(true, CoreBridge.save()); }
-                catch (IOException | RuntimeException failure) { saveFailure = "Recovery save failed: " + failure.getMessage() + ". Keep the app open and retry Save game."; }
+                try {
+                    String saved = CoreBridge.save();
+                    saves.write(true, saved);
+                    if (!resetSelection && previousTurn >= 0 && next.turn > previousTurn
+                            && cadence > 0 && (next.turn - 1) % cadence == 0) saves.autosave(saved, retention);
+                }
+                catch (IOException | RuntimeException failure) { saveFailure = "Automatic save failed: " + failure.getMessage() + ". Keep the app open and retry Save game."; }
                 String saveFeedback = saveFailure;
                 if (BuildConfig.DEBUG) try {
                     android.util.AtomicFile debug = new android.util.AtomicFile(new File(context.getFilesDir(), "debug-state.json"));

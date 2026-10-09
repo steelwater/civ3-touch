@@ -25,6 +25,8 @@ final class MapView extends View {
     private final GestureDetector gestures;
     private final ScaleGestureDetector scaling;
     private boolean multiTouch, tapped;
+    private boolean animating;
+    private final Runnable redraw = this::invalidate;
     private TileTap onLongPress;
     private TileTap onTap;
     private GameState state;
@@ -44,7 +46,7 @@ final class MapView extends View {
         gestures = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent e) { return true; }
             @Override public boolean onScroll(MotionEvent first, MotionEvent current, float dx, float dy) {
-                if (!multiTouch && state != null) {
+                if (!multiTouch && state != null && QolSettings.drag(getContext())) {
                     camera.pan(-dx, -dy, halfWidth, halfHeight, state.width, state.height);
                     describeViewport(); invalidate();
                 }
@@ -60,6 +62,7 @@ final class MapView extends View {
         });
         scaling = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override public boolean onScale(ScaleGestureDetector detector) {
+                if (!QolSettings.pinch(getContext())) return true;
                 camera.scale(detector.getScaleFactor(), detector.getFocusX() - getWidth() / 2f,
                         detector.getFocusY() - getHeight() / 2f, halfWidth, halfHeight, state.width, state.height);
                 updateScale(); describeViewport(); invalidate(); return true;
@@ -69,8 +72,15 @@ final class MapView extends View {
         updateScale();
         setClickable(true);
         setFocusable(true);
+        setFocusableInTouchMode(true);
         setContentDescription("Generated map. Start a new game.");
     }
+
+    void setAnimating(boolean value) {
+        animating = value; removeCallbacks(redraw);
+        if (value) invalidate();
+    }
+    @Override protected void onDetachedFromWindow() { removeCallbacks(redraw); super.onDetachedFromWindow(); }
 
     void setOnTileLongPress(TileTap callback) { onLongPress = callback; }
     private void updateScale() { halfWidth = 48 * density * camera.zoom; halfHeight = 28 * density * camera.zoom; }
@@ -125,7 +135,7 @@ final class MapView extends View {
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        canvas.drawColor(Color.rgb(22, 32, 44));
+        canvas.drawColor(QolSettings.dark(getContext()) ? 0xff080808 : 0xffe8e8e8);
         if (state == null) return;
         for (int y = 0; y < state.height; y++) {
             for (int x = 0; x < state.width; x++) tile(canvas, x, y, Color.rgb(42, 52, 64), true);
@@ -143,16 +153,16 @@ final class MapView extends View {
             }
             if (visible.road > 0 || !visible.improvement.isEmpty()) {
                 paint.setColor(0xffffdd6b); paint.setTextAlign(Paint.Align.CENTER); paint.setTextSize(halfHeight * .45f);
-                canvas.drawText((visible.road > 0 ? "R " : "") + visible.improvement,
-                        screenX(visible.x, visible.y), screenY(visible.x, visible.y) + halfHeight * .7f, paint);
+                label(canvas, (visible.road > 0 ? "R " : "") + visible.improvement,
+                        screenX(visible.x, visible.y), screenY(visible.x, visible.y) + halfHeight * .7f);
             }
             if (!"Visible".equals(visible.visibility)) tile(canvas, visible.x, visible.y, 0x77000000, false);
             tile(canvas, visible.x, visible.y, 0xff263b35, true);
             if (!visible.resource.isEmpty()) {
                 paint.setColor(0xffffe8a3); paint.setTextAlign(Paint.Align.CENTER);
                 paint.setTextSize(halfHeight * .36f);
-                canvas.drawText(visible.resource, screenX(visible.x, visible.y),
-                        screenY(visible.x, visible.y) - halfHeight * .3f, paint);
+                label(canvas, visible.resource, screenX(visible.x, visible.y),
+                        screenY(visible.x, visible.y) - halfHeight * .3f);
             }
             if (!"None".equals(visible.vegetation)) {
                 paint.setColor(0xff183e27);
@@ -175,14 +185,14 @@ final class MapView extends View {
                 paint.setColor(city.getInt("owner") == 0 ? 0xffeddb9a : 0xffff7777);
                 canvas.drawRect(x - halfHeight * .55f, y - halfHeight, x + halfHeight * .55f, y, paint);
                 paint.setTextSize(halfHeight * .4f); paint.setTextAlign(Paint.Align.CENTER);
-                canvas.drawText(city.getString("name") + " (" + city.getInt("population") + ")", x, y - halfHeight * 1.1f, paint);
+                label(canvas, (city.getInt("owner") == 0 ? "Own: " : "Other: ") + city.getString("name") + " (" + city.getInt("population") + ")", x, y + halfHeight * 1.5f);
             }
             for (int i = 0; i < state.units.length(); i++) {
                 org.json.JSONObject unit = state.units.getJSONObject(i);
                 if (unit.getJSONObject("id").getInt("index") == state.index) continue;
                 org.json.JSONObject pos = unit.getJSONObject("position");
                 marker(canvas, screenX(pos.getInt("x"), pos.getInt("y")), screenY(pos.getInt("x"), pos.getInt("y")),
-                        unit.getString("unit_type_name"), unit.getInt("owner") == 0 ? Color.WHITE : 0xffff7777);
+                        (unit.getInt("owner") == 0 ? "" : "!") + unit.getString("unit_type_name"), unit.getInt("owner") == 0 ? Color.WHITE : 0xffff7777, false);
             }
         } catch (org.json.JSONException failure) { throw new IllegalStateException(failure); }
         if (state.index < 0) return;
@@ -213,22 +223,67 @@ final class MapView extends View {
                     cx + frameWidth * scale / 2, cy + halfHeight * .25f);
             paint.setColor(Color.WHITE);
             canvas.drawBitmap(sprite, source, destination, paint);
-            if (getWindowVisibility() == VISIBLE) postInvalidateDelayed(delay);
+            if (animating && getWindowVisibility() == VISIBLE && isShown()) {
+                removeCallbacks(redraw); postDelayed(redraw, Math.max(33, delay));
+            }
         } else {
-            marker(canvas, cx, cy, state.name, selected ? 0xffffdd6b : Color.WHITE);
+            marker(canvas, cx, cy, state.name, selected ? 0xffffdd6b : Color.WHITE, selected);
         }
     }
 
-    private void marker(Canvas canvas, float x, float y, String name, int color) {
+    private void marker(Canvas canvas, float x, float y, String name, int color, boolean highlight) {
         paint.setColor(color); canvas.drawCircle(x, y, halfHeight * .65f, paint);
         paint.setColor(0xff24364a); paint.setTextSize(halfHeight * .5f); paint.setTextAlign(Paint.Align.CENTER);
         String label = "warrior".equals(name) ? "War" : "worker".equals(name) ? "Wkr" : name.substring(0, Math.min(3, name.length()));
         canvas.drawText(label, x, y + halfHeight * .2f, paint);
+        if (highlight) {
+            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(2 * density);
+            paint.setColor(Color.BLACK); canvas.drawCircle(x, y, halfHeight * .75f, paint);
+            paint.setColor(Color.WHITE); canvas.drawCircle(x, y, halfHeight * .85f, paint);
+            paint.setStyle(Paint.Style.FILL);
+        }
+    }
+
+    private void label(Canvas canvas, String value, float x, float y) {
+        paint.setTextSize(Math.max(paint.getTextSize(), 12 * getResources().getDisplayMetrics().scaledDensity));
+        float width = paint.measureText(value) / 2;
+        Paint.FontMetrics metrics = paint.getFontMetrics();
+        paint.setColor(Color.BLACK);
+        canvas.drawRect(x - width - 2 * density, y + metrics.ascent - density,
+                x + width + 2 * density, y + metrics.descent + density, paint);
+        paint.setColor(Color.WHITE); paint.setTextAlign(Paint.Align.CENTER);
+        canvas.drawText(value, x, y, paint);
+    }
+    @Override public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+        if (state == null || !isEnabled()) return super.onKeyDown(keyCode, event);
+        float step = 32 * density;
+        switch (keyCode) {
+            case android.view.KeyEvent.KEYCODE_DPAD_LEFT: camera.pan(step, 0, halfWidth, halfHeight, state.width, state.height); break;
+            case android.view.KeyEvent.KEYCODE_DPAD_RIGHT: camera.pan(-step, 0, halfWidth, halfHeight, state.width, state.height); break;
+            case android.view.KeyEvent.KEYCODE_DPAD_UP: camera.pan(0, step, halfWidth, halfHeight, state.width, state.height); break;
+            case android.view.KeyEvent.KEYCODE_DPAD_DOWN: camera.pan(0, -step, halfWidth, halfHeight, state.width, state.height); break;
+            case android.view.KeyEvent.KEYCODE_PLUS:
+            case android.view.KeyEvent.KEYCODE_EQUALS: zoom(1.1f); return true;
+            case android.view.KeyEvent.KEYCODE_MINUS: zoom(1 / 1.1f); return true;
+            case android.view.KeyEvent.KEYCODE_C: centerSelection(); return true;
+            default: return super.onKeyDown(keyCode, event);
+        }
+        describeViewport(); invalidate(); return true;
+    }
+    private void zoom(float factor) {
+        camera.scale(factor, 0, 0, halfWidth, halfHeight, state.width, state.height);
+        updateScale(); describeViewport(); invalidate();
+    }
+    @Override public boolean onGenericMotionEvent(MotionEvent event) {
+        if (isEnabled() && state != null && event.getActionMasked() == MotionEvent.ACTION_SCROLL) {
+            zoom((float) Math.pow(1.1, event.getAxisValue(MotionEvent.AXIS_VSCROLL))); return true;
+        }
+        return super.onGenericMotionEvent(event);
     }
 
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (!isEnabled() || state == null) return false;
-        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) multiTouch = false;
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) { multiTouch = false; requestFocus(); }
         if (event.getPointerCount() > 1) multiTouch = true;
         tapped = false;
         scaling.onTouchEvent(event);

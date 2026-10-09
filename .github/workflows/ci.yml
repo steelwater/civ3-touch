@@ -39,6 +39,7 @@ jobs:
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo test --locked --workspace
           bash scripts/test-touch.sh
+          bash scripts/test-saves.sh
           python3 scripts/test_inventory.py
           python3 scripts/check-source-policy.py
           python3 scripts/verify-upstream.py

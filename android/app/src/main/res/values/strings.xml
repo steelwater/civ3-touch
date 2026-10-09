@@ -20,4 +20,5 @@
     <string name="unit_sheet_title">%1$s • %2$s actions</string>
     <string name="economy">Gold %1$d (%2$+d/turn) • Science %3$d (%4$+d/turn)\nResearch: %5$s</string>
     <string name="information_details">%1$s\n%2$s</string>
+    <string name="unit_compact_title">%1$s ▾</string>
 </resources>

@@ -12,10 +12,18 @@ import java.util.List;
 
 /** Shared scrollable, large-target presentation for commands and information. */
 final class TouchUi {
+    static int background(Context context) { return QolSettings.dark(context) ? 0xff121212 : Color.WHITE; }
+    static int foreground(Context context) { return QolSettings.dark(context) ? Color.WHITE : 0xff111111; }
+    static void readable(TextView text) {
+        boolean dark = QolSettings.dark(text.getContext());
+        text.setTextColor(new android.content.res.ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}},
+                new int[]{dark ? 0xffbbbbbb : 0xff555555, foreground(text.getContext())}));
+    }
     static int dp(Context context, int value) { return Math.round(value * context.getResources().getDisplayMetrics().density); }
     static Button button(Context context) {
         Button button = new Button(context);
         button.setTextSize(16);
+        readable(button);
         button.setAllCaps(false);
         button.setMinHeight(dp(context, 48));
         return button;
@@ -28,7 +36,7 @@ final class TouchUi {
     }
     static TextView text(Context context, String value, int size) {
         TextView text = new TextView(context);
-        text.setText(value); text.setTextSize(size);
+        text.setText(value); text.setTextSize(size); readable(text);
         int padding = dp(context, 12);
         text.setPadding(padding, padding, padding, padding);
         return text;
@@ -38,7 +46,7 @@ final class TouchUi {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         LinearLayout root = new LinearLayout(activity);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.rgb(245, 242, 230));
+        root.setBackgroundColor(background(activity));
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
                     insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
