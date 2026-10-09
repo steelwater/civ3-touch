@@ -43,6 +43,7 @@ jobs:
           python3 scripts/check-source-policy.py
           python3 scripts/verify-upstream.py
           python3 scripts/test_vendor_policy.py
+          python3 scripts/compatibility/test_inspect_header.py
       - name: Compile and lint Android
         run: android/gradlew -p android --no-daemon assembleDebug lintDebug
       - name: Package APK, corresponding source and checksums
