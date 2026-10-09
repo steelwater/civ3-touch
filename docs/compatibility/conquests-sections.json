@@ -1,0 +1,193 @@
+[
+  {
+    "section": "BLDG",
+    "offset": 736,
+    "count": 83,
+    "lengths": [
+      268
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "CTZN",
+    "offset": 23320,
+    "count": 6,
+    "lengths": [
+      124
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "CULT",
+    "offset": 24096,
+    "count": 6,
+    "lengths": [
+      88
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "DIFF",
+    "offset": 24656,
+    "count": 8,
+    "lengths": [
+      120
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "ERAS",
+    "offset": 25656,
+    "count": 4,
+    "lengths": [
+      264
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "ESPN",
+    "offset": 26736,
+    "count": 9,
+    "lengths": [
+      232
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "EXPR",
+    "offset": 28868,
+    "count": 4,
+    "lengths": [
+      40
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "GOOD",
+    "offset": 29052,
+    "count": 26,
+    "lengths": [
+      88
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "GOVT",
+    "offset": 31452,
+    "count": 8,
+    "lengths": [
+      568
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "RULE",
+    "offset": 36036,
+    "count": 1,
+    "lengths": [
+      720
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "PRTO",
+    "offset": 36768,
+    "count": 141,
+    "lengths": [
+      255,
+      327,
+      619,
+      623
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "RACE",
+    "offset": 74971,
+    "count": 32,
+    "lengths": [
+      2996,
+      3108,
+      3148,
+      3204,
+      3236,
+      3244,
+      3252,
+      3276,
+      3308,
+      3316,
+      3340,
+      3364,
+      3388,
+      3396,
+      3404,
+      3428,
+      3436,
+      3452,
+      3468,
+      3500,
+      3532,
+      3604,
+      3668,
+      3708,
+      3796,
+      3860,
+      4276
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "TECH",
+    "offset": 184667,
+    "count": 83,
+    "lengths": [
+      112
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "TFRM",
+    "offset": 194303,
+    "count": 13,
+    "lengths": [
+      112
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "TERR",
+    "offset": 195819,
+    "count": 14,
+    "lengths": [
+      233
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "WSIZ",
+    "offset": 199145,
+    "count": 5,
+    "lengths": [
+      80
+    ],
+    "length_convention": "payload bytes excluding length field"
+  },
+  {
+    "section": "FLAV",
+    "offset": 199573,
+    "count": 7,
+    "lengths": [
+      292
+    ],
+    "length_convention": "fixed bytes including unknown prefix"
+  },
+  {
+    "section": "GAME",
+    "offset": 201629,
+    "count": 1,
+    "lengths": [
+      7581
+    ],
+    "length_convention": "payload bytes excluding length field"
+  }
+]
