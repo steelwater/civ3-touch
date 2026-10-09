@@ -1,6 +1,6 @@
 # Civ3Touch
 
-An independent, open-source investigation of an Android client built around the FreeC3 simulation engine, using user-supplied GOG Civilization III Complete data. **Milestone 4 adapts the existing cities, research, Workers, AI, combat and replay-save loop for touch, with map gestures, a unit action sheet and scrollable city screens. It remains a prototype pending Milestone 4 review and Captain playtesting.**
+An independent, open-source investigation of an Android client built around the FreeC3 simulation engine, using user-supplied GOG Civilization III Complete data. **The canonical roadmap marks Milestones 1–4 complete. Milestone 5 begins with a [rules-compatibility audit](docs/milestone-5.md); the existing playable prototype does not yet implement complete Conquests rules.**
 
 Civ3Touch is not affiliated with or endorsed by Firaxis, 2K, GOG, FreeC3, or OpenCiv3/C7. Civilization III and related trademarks belong to their owners. No proprietary game data is included. Civ3Touch additions use GPL-3.0-only; see [LICENSE](LICENSE), [upstream attribution](UPSTREAM.md), and [licensing decision](docs/licensing.md).
 
@@ -29,14 +29,16 @@ Five original base terrain types and the selected Settler's idle/run animations 
 
 ## Project layout and continuation
 
-- `vendor/freec3/`: unchanged pinned upstream source; [revision and hashes](docs/freec3-baseline.json).
+- `vendor/freec3/`: pinned upstream source with [recorded resource patches](docs/freec3-resource-patches.json); [original revision and hashes](docs/freec3-baseline.json).
 - `crates/civ3touch-core/`: platform-independent game session, smoke operation and local decoder probe; Android JNI adapter is target-gated.
 - `android/`: Java map/input Activity, APK packaging, and Gradle wrapper.
 - `scripts/`: native build, device smoke, inventory, and source-policy checks.
 - `docs/`: [build instructions](docs/build.md), [architecture/integration](docs/android-integration.md), [GOG inventory](docs/gog-data.md), [test/CI evidence](docs/testing.md), and [milestone audit](docs/milestone-0-audit.md).
 - `installer/`, `local-data/`, `.local/`, and build output: ignored local inputs and tools. See [asset policy](docs/asset-policy.md).
 
-Canonical scope: [Milestone 4 Crew Brief](https://docs.google.com/document/d/1N5vx-kjQc4sJ2hsAweb9p-dI2i4N0PCHL9bu3G3AIXE/edit) and [roadmap](https://docs.google.com/document/d/149SobRRG_ZL3qq4fXuJ5KZG0R_l9vmf3NOmQ8W1TWlE/edit). Milestone 5 rules expansion requires a separate mission. Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
+Canonical scope: [Milestone 5 Crew Brief](https://docs.google.com/document/d/1vaHIo3TjDDqFBKw63hY0qtk8eRRrtJJRnE0aSJERGsA/edit) and [roadmap](https://docs.google.com/document/d/149SobRRG_ZL3qq4fXuJ5KZG0R_l9vmf3NOmQ8W1TWlE/edit). The [audit and compatibility matrix](docs/milestone-5.md) distinguish existing code from verified original-game behavior. Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+The [first resource slice](docs/milestone-5-resources.md) adds Wheat, Cattle, Gold and Horses to new prototype games, with worked-tile bonuses and technology-filtered resource labels. Long press a tile to inspect it. Existing M3-v2/M4 saves retain their original rules; new M5 saves require an M5-capable build. This remains partial resource support, without trade networks or luxury happiness.
 
 ## GitHub builds
 

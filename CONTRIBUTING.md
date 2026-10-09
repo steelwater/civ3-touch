@@ -7,3 +7,5 @@ Read the [README](README.md), [asset policy](docs/asset-policy.md), and [test in
 Never attach proprietary installers, game data, screenshots of proprietary assets, sounds, saves, or extracted payloads to commits, issues, CI artifacts, or review documents. Use synthetic test data; keep real-data tests developer-local. Metadata-only path inventories are allowed.
 
 Run the focused checks in `docs/testing.md` and inspect the diff and proposed source set before committing. Treat `vendor/freec3` as immutable until an explicitly documented upstream update or patch is approved. Do not run a formatter across the vendor snapshot.
+
+The approved M5 resource patches are documented in [the resource/save policy](docs/milestone-5-resources.md) and `docs/freec3-resource-patches.json`. The original baseline hashes remain unchanged; all unlisted files must still match. This exception does not authorize unrelated upstream edits.

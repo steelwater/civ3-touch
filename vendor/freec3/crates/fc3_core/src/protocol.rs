@@ -319,6 +319,9 @@ pub struct ProductionOption {
 /// Snapshot of a single tile as seen by a player.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TileSnapshot {
+    /// Already filtered by the viewing player's technology and map visibility.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource: Option<String>,
     pub coord: TileCoord,
     pub terrain: Terrain,
     pub vegetation: Vegetation,

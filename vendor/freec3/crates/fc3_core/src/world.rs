@@ -49,6 +49,9 @@ pub struct Player {
 /// All game state in one struct.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct World {
+    /// Omitted in legacy saves so their exact replay verification remains valid.
+    #[serde(default, skip_serializing_if = "crate::resource::disabled")]
+    pub resources_enabled: bool,
     pub tiles: TileStore,
     pub units: UnitStore,
     pub cities: CityStore,
@@ -109,6 +112,7 @@ impl World {
                 continue;
             }
             visible_tiles.push(TileSnapshot {
+                resource: crate::resource::revealed(self, player, i).map(|r| r.name.to_string()),
                 coord,
                 terrain: self.tiles.terrain[i],
                 vegetation: self.tiles.vegetation[i],
@@ -352,6 +356,7 @@ impl World {
         for i in 0..total {
             let coord = self.tiles.coords(i);
             all_tiles.push(TileSnapshot {
+                resource: crate::resource::revealed(self, player, i).map(|r| r.name.to_string()),
                 coord,
                 terrain: self.tiles.terrain[i],
                 vegetation: self.tiles.vegetation[i],
@@ -454,6 +459,7 @@ impl World {
 
         World {
             tiles,
+            resources_enabled: false,
             units: UnitStore::new(),
             cities: CityStore::new(),
             unit_types: UnitTypeRegistry::new(),
@@ -508,6 +514,7 @@ impl World {
                 Terrain::Grassland,
                 config.num_players,
             ),
+            resources_enabled: false,
             units: UnitStore::new(),
             cities: CityStore::new(),
             unit_types: UnitTypeRegistry::new(),

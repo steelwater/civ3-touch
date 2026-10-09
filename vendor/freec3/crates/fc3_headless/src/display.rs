@@ -403,6 +403,7 @@ mod tests {
             for x in 0..5u32 {
                 let idx = (x + y * 5) as usize % terrains.len();
                 tiles.push(TileSnapshot {
+                    resource: None,
                     coord: TileCoord { x, y },
                     terrain: terrains[idx],
                     vegetation: vegetations[idx],

@@ -12,11 +12,13 @@ use std::path::Path;
 const PLAYER: PlayerId = PlayerId(0);
 const SAVE_VERSION: u64 = 1;
 // Change this contract whenever the rules, session policy or engine version changes.
-const RULESET: &str = "freec3-90fc7ee-civ3touch-m3-v2";
+const LEGACY_RULESET: &str = "freec3-90fc7ee-civ3touch-m3-v2";
+const RULESET: &str = "freec3-90fc7ee-civ3touch-m5-resources-v1";
 const MAX_ACTIONS: usize = 20_000;
 pub const MAX_SAVE_BYTES: usize = 16 * 1024 * 1024;
 
 pub struct Session {
+    ruleset: &'static str,
     engine: Engine,
     queues: Vec<(CityId, Vec<ProductionItem>)>,
     journal: Vec<Value>,
@@ -25,6 +27,10 @@ pub struct Session {
 
 impl Session {
     pub fn new(rules: &Path) -> Result<Self, String> {
+        Self::with_ruleset(rules, RULESET)
+    }
+
+    fn with_ruleset(rules: &Path, ruleset: &'static str) -> Result<Self, String> {
         let rules = rules.canonicalize().map_err(|e| e.to_string())?;
         let mut rules_identity = std::collections::BTreeMap::new();
         for entry in std::fs::read_dir(&rules).map_err(|e| e.to_string())? {
@@ -40,21 +46,25 @@ impl Session {
                 );
             }
         }
-        let engine = Engine::new_game(&GameConfig {
-            world: WorldConfig {
-                width: 16,
-                height: 16,
-                wrap_x: false,
-                wrap_y: false,
-                num_players: 2,
-                seed: 42,
+        let engine = Engine::new_game_with_resources(
+            &GameConfig {
+                world: WorldConfig {
+                    width: 16,
+                    height: 16,
+                    wrap_x: false,
+                    wrap_y: false,
+                    num_players: 2,
+                    seed: 42,
+                },
+                mod_paths: vec![rules.to_str().ok_or("rules path is not UTF-8")?.into()],
+                units_per_player: vec!["settler".into(), "worker".into(), "warrior".into()],
+                max_turns: None,
             },
-            mod_paths: vec![rules.to_str().ok_or("rules path is not UTF-8")?.into()],
-            units_per_player: vec!["settler".into(), "worker".into(), "warrior".into()],
-            max_turns: None,
-        })
+            ruleset == RULESET,
+        )
         .map_err(|e| e.to_string())?;
         Ok(Self {
+            ruleset,
             engine,
             queues: vec![],
             journal: vec![],
@@ -92,7 +102,7 @@ impl Session {
             .into_iter()
             .map(|(id, destinations)| json!({"unit_id": id, "destinations": destinations}))
             .collect();
-        json!({"view": self.engine.player_view(PLAYER), "moves": moves,
+        json!({"ruleset": self.ruleset, "view": self.engine.player_view(PLAYER), "moves": moves,
             "available": self.engine.available_commands(PLAYER), "queues": self.queues,
             "game_over": self.engine.is_game_over(), "result": result})
     }
@@ -366,7 +376,7 @@ impl Session {
     pub fn save(&self) -> Result<String, String> {
         let world =
             serde_json::to_value(&*self.engine.world().borrow()).map_err(|e| e.to_string())?;
-        let text = json!({"version": SAVE_VERSION, "ruleset": RULESET, "rules": self.rules_identity, "journal": self.journal,
+        let text = json!({"version": SAVE_VERSION, "ruleset": self.ruleset, "rules": self.rules_identity, "journal": self.journal,
             "world": world, "queues": self.queues, "turn": self.engine.current_turn(),
             "player": self.engine.current_player()})
         .to_string();
@@ -381,16 +391,21 @@ impl Session {
             return Err("Save exceeds the prototype's 16 MiB limit".into());
         }
         let saved: Value = serde_json::from_str(text).map_err(|_| "Save is not valid JSON")?;
-        if saved["version"] != SAVE_VERSION || saved["ruleset"] != RULESET {
+        if saved["version"] != SAVE_VERSION {
             return Err("Unsupported save version or ruleset".into());
         }
+        let ruleset = match saved["ruleset"].as_str() {
+            Some(LEGACY_RULESET) => LEGACY_RULESET,
+            Some(RULESET) => RULESET,
+            _ => return Err("Unsupported save version or ruleset".into()),
+        };
         let journal = saved["journal"]
             .as_array()
             .ok_or("Save journal is missing")?;
         if journal.len() > MAX_ACTIONS {
             return Err("Save action limit exceeded".into());
         }
-        let mut game = Self::new(rules)?;
+        let mut game = Self::with_ruleset(rules, ruleset)?;
         if json!(game.rules_identity) != saved["rules"] {
             return Err("Save rules differ from the installed rules".into());
         }

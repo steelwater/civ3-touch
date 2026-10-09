@@ -75,6 +75,11 @@ impl Engine {
     /// Initializes the world, script engine, all Lua APIs, loads mods,
     /// spawns starting units, initializes fog of war, and fires on_game_start.
     pub fn new_game(config: &GameConfig) -> Result<Self, mlua::Error> {
+        Self::new_game_with_resources(config, false)
+    }
+
+    /// Civ3Touch opt-in; old callers and replay contracts retain base behavior.
+    pub fn new_game_with_resources(config: &GameConfig, resources: bool) -> Result<Self, mlua::Error> {
         let world = if config.units_per_player.is_empty() {
             // Legacy/test mode: flat grassland
             World::new(&config.world)
@@ -185,6 +190,12 @@ impl Engine {
 
         // Fire on_game_start hook
         engine.fire_hook_simple("on_game_start", &[]);
+
+        if resources {
+            let mut world = engine.world.borrow_mut();
+            world.resources_enabled = true;
+            crate::resource::place(&mut world.tiles, config.world.seed);
+        }
 
         Ok(engine)
     }
@@ -603,6 +614,23 @@ impl Engine {
             }
         }
 
+        // Revealing a resource can change worked-tile choices and cached yields.
+        // Legacy sessions intentionally keep the original turn ordering.
+        if self.world.borrow().resources_enabled
+            && events.iter().any(|e| matches!(e, Event::TechResearched { .. }))
+        {
+            let cities: Vec<_> = {
+                let w = self.world.borrow();
+                w.cities.iter_alive()
+                    .filter(|(_, i)| w.cities.owner[*i] == player)
+                    .map(|(id, _)| id)
+                    .collect()
+            };
+            for city in cities {
+                self.reassign_city_tiles(city);
+            }
+        }
+
         // Fire on_turn_end hook
         self.fire_hook_simple("on_turn_end", &[("player_id", player.0 as i64)]);
 
@@ -860,6 +888,7 @@ impl Engine {
     /// Extracts a GameLog from the current engine state.
     pub fn to_game_log(&self, config: &GameConfig) -> GameLog {
         GameLog {
+            resources_enabled: self.world.borrow().resources_enabled,
             seed: config.world.seed,
             game_config: config.clone(),
             commands: self.event_log.clone(),
@@ -870,6 +899,8 @@ impl Engine {
 /// A complete record of a game for deterministic replay.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameLog {
+    #[serde(default, skip_serializing_if = "crate::resource::disabled")]
+    pub resources_enabled: bool,
     pub seed: u64,
     pub game_config: GameConfig,
     pub commands: Vec<(u32, PlayerId, Command)>,
@@ -878,7 +909,7 @@ pub struct GameLog {
 impl GameLog {
     /// Replays the game log, producing an Engine in the final state.
     pub fn replay(&self) -> Result<Engine, mlua::Error> {
-        let mut engine = Engine::new_game(&self.game_config)?;
+        let mut engine = Engine::new_game_with_resources(&self.game_config, self.resources_enabled)?;
         for (_turn, player, command) in &self.commands {
             engine.submit_command(*player, command.clone());
         }

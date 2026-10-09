@@ -1,10 +1,10 @@
 # Upstream attribution
 
-Civ3Touch incorporates an **unmodified source snapshot** of [FreeC3](https://github.com/andrewimm/FreeC3), revision `90fc7eeda2d1914c9306b33a161686fa839b8455`, under `vendor/freec3/`.
+Civ3Touch incorporates a source snapshot of [FreeC3](https://github.com/andrewimm/FreeC3), revision `90fc7eeda2d1914c9306b33a161686fa839b8455`, under `vendor/freec3/`, with narrow resource-foundation patches approved by Dan on 2026-10-09. Original baseline hashes remain in `docs/freec3-baseline.json`; changed/new file hashes and reasons are recorded separately in `docs/freec3-resource-patches.json`. See [patch and save policy](docs/milestone-5-resources.md).
 
 FreeC3 is maintained at the `andrewimm/FreeC3` repository. Its GNU GPL version 3 license and original README are preserved verbatim there. The root LICENSE reproduces that GPL text. Civ3Touch additions are licensed GPL-3.0-only. The snapshot's file hashes are in `docs/freec3-baseline.json`; run `python3 scripts/verify-upstream.py` to check it.
 
-Civ3Touch's Rust wrapper, Java app, build scripts, tests, and documentation are additions dated 2026-10-02. The wrapper enables mlua's vendored Lua feature in its own manifest; it does not alter FreeC3 source. This directory snapshot is the baseline mechanism; no upstream fork or remote publication has occurred.
+Civ3Touch's Rust wrapper, Java app, build scripts, tests, and documentation began on 2026-10-02. The wrapper enables mlua's vendored Lua feature in its own manifest. The M5 patches add resource state, placement, filtered views and worked-tile yields while retaining the original Lua files and legacy behavior. The original upstream license and notices remain intact.
 
 `third-party-notices/` preserves license/notice files from the Cargo packages resolved for the Android target (including build dependencies). `docs/dependency-licenses.json` lists versions and declared licenses. The `lua-src` package used by the spike embeds Lua 5.4.7 under its MIT license. The independently built unmodified host baseline was tested with Lua 5.4.8.
 

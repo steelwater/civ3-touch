@@ -181,17 +181,33 @@ impl Engine {
         }
     }
 
+    /// Worked-tile yield, including resources revealed to this city's owner.
+    pub fn calculate_tile_yield_for_player(
+        &self, player: PlayerId, x: u32, y: u32,
+    ) -> (i32, i32, i32) {
+        let base = self.calculate_tile_yield(x, y);
+        let world = self.world.borrow();
+        match crate::resource::revealed(&world, player, world.tiles.idx(x, y)) {
+            Some(r) => (base.0 + r.food, base.1 + r.shields, base.2 + r.commerce),
+            None => base,
+        }
+    }
+
     /// Reassigns tiles for a city based on its population.
     /// City of population N works the city center + N best tiles.
     /// The city center always produces at minimum {2, 1, 0} or the terrain yield, whichever is better.
     pub fn reassign_city_tiles(&self, city_id: crate::id::CityId) {
-        let (city_pos, city_pop) = {
+        let (city_pos, city_pop, city_owner) = {
             let world = self.world.borrow();
             let idx = match world.cities.get(city_id) {
                 Some(i) => i,
                 None => return,
             };
-            (world.cities.position[idx], world.cities.population[idx])
+            (
+                world.cities.position[idx],
+                world.cities.population[idx],
+                world.cities.owner[idx],
+            )
         };
 
         // Get the city radius tiles
@@ -217,7 +233,8 @@ impl Engine {
             if !is_available {
                 continue;
             }
-            let (food, shields, commerce) = self.calculate_tile_yield(tile_pos.x, tile_pos.y);
+            let (food, shields, commerce) =
+                self.calculate_tile_yield_for_player(city_owner, tile_pos.x, tile_pos.y);
             tile_yields.push((*tile_pos, food, shields, commerce));
         }
 
@@ -971,11 +988,13 @@ impl Engine {
 
         let mut result = Vec::with_capacity(worked_tiles.len());
         for tile_pos in &worked_tiles {
-            let (food, shields, commerce) = self.calculate_tile_yield(tile_pos.x, tile_pos.y);
             if *tile_pos == city_pos {
+                let (food, shields, commerce) = self.calculate_tile_yield(tile_pos.x, tile_pos.y);
                 // City center minimum: {2, 1, 1}
                 result.push((*tile_pos, food.max(2), shields.max(1), commerce.max(1)));
             } else {
+                let (food, shields, commerce) =
+                    self.calculate_tile_yield_for_player(player, tile_pos.x, tile_pos.y);
                 result.push((*tile_pos, food, shields, commerce));
             }
         }

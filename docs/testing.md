@@ -1,5 +1,11 @@
 # Civ3Touch verification and CI
 
+## Milestone 5
+
+Begin with the [compatibility audit and matrix](milestone-5.md), [reference/fixture verification guide](milestone-5-verification.md) and approved [resource patch/save policy](milestone-5-resources.md). Existing green tests establish prototype health, not original-game parity. `cargo test --locked --test resource_foundation` covers the resource slice and frozen legacy saves; the workspace test command includes it. `python3 scripts/verify-upstream.py` now verifies the unchanged baseline plus the explicit resource patch manifest. Preserve the Android import, touch, loop and lifecycle journeys below.
+
+Run `python3 scripts/test_vendor_policy.py` to exercise the provenance gate against synthetic unrecorded edits/additions and a broken original-hash chain. On an isolated disposable emulator, `python3 scripts/android-resource-acceptance.py SERIAL` starts a synthetic new M5 game, long presses a resource tile, verifies the native name in the inspector and checks that inspection/Back leave state unchanged. Its synthetic screenshot stays under `.local/milestone-5/`. Run sequentially with the other device journeys.
+
 ## Milestone 4
 
 Run the existing Rust format/Clippy/tests, synthetic inventory, source policy, vendor hashes and Android build/lint gates. `bash scripts/test-touch.sh` uses only the existing JDK to test camera pan, focus-preserving pinch, zoom limits and map bounds, and is included in CI. No test framework or durable dependency is added.
