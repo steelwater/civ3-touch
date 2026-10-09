@@ -46,8 +46,9 @@ class HeaderTests(unittest.TestCase):
             struct.pack_into("<i", data, offset, value)
             with self.assertRaises(ProbeError):
                 inspect_header(data, len(data))
+        data = rules()
         data[4:8] = b"NOPE"
-        with self.assertRaises(ProbeError):
+        with self.assertRaisesRegex(ProbeError, "expected VER#"):
             inspect_header(data, len(data))
 
     def test_compression_prefix_is_only_a_candidate_even_without_a_body(self):
