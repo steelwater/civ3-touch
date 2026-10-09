@@ -2,50 +2,63 @@ package org.civ3touch.spike;
 
 import android.content.Context;
 import android.util.AtomicFile;
+import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.text.DateFormat;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.List;
 
-/** App-private durable slots. A failed write retains the previously committed slot. */
+/** App-private slots. Native save bytes and existing manual/recovery paths stay unchanged. */
 final class GameSaves {
-    private static final int LIMIT = 16 * 1024 * 1024;
     private final File directory;
     GameSaves(Context context, boolean synthetic) {
-        directory = new File(context.getNoBackupFilesDir(), synthetic ? "synthetic-saves" : "saves");
+        this(new File(context.getNoBackupFilesDir(), synthetic ? "synthetic-saves" : "saves"));
     }
-    private AtomicFile slot(boolean recovery) {
-        return new AtomicFile(new File(directory, recovery ? "recovery.json" : "manual.json"));
+    GameSaves(File directory) { this.directory = directory; }
+    private File slot(String name) {
+        if (!name.matches("manual|recovery|quick|auto-[0-9]")) throw new IllegalArgumentException("Unknown save slot");
+        return new File(directory, name + ".json");
     }
-    void write(boolean recovery, String value) throws IOException {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > LIMIT) throw new IOException("Save exceeds 16 MiB");
-        if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException("Cannot create save directory");
-        AtomicFile file = slot(recovery);
-        FileOutputStream output = null;
+    void write(boolean recovery, String value) throws IOException { write(recovery ? "recovery" : "manual", value); }
+    void write(String name, String value) throws IOException {
+        File file = slot(name);
+        // Recover a pre-M7 AtomicFile backup before replacing its base file.
+        if (new File(file.getPath() + ".bak").exists()) {
+            try (FileInputStream ignored = new AtomicFile(file).openRead()) { /* Restores legacy committed bytes. */ }
+        }
+        SaveFiles.write(file, value);
+    }
+    String read(boolean recovery) throws IOException { return read(recovery ? "recovery" : "manual"); }
+    String read(String name) throws IOException {
+        try (FileInputStream input = new AtomicFile(slot(name)).openRead()) { return SaveFiles.read(input); }
+    }
+    String describe(String name) {
         try {
-            output = file.startWrite();
-            output.write(bytes);
-            output.getFD().sync();
-            file.finishWrite(output);
-            output = null;
-            if (!read(recovery).equals(value)) throw new IOException("Save verification failed");
-        } catch (IOException failure) {
-            if (output != null) file.failWrite(output);
-            throw failure;
-        }
+            JSONObject saved = new JSONObject(read(name));
+            return "Turn " + saved.getInt("turn") + " • "
+                    + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(slot(name).lastModified()));
+        } catch (java.io.FileNotFoundException failure) { return "Empty slot"; }
+        catch (Exception failure) { return "Unreadable slot — loading will show details"; }
     }
-    String read(boolean recovery) throws IOException {
-        try (FileInputStream input = slot(recovery).openRead(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[8192];
-            int count;
-            while ((count = input.read(buffer)) != -1) {
-                if (output.size() + count > LIMIT) throw new IOException("Save exceeds 16 MiB");
-                output.write(buffer, 0, count);
-            }
-            return output.toString(StandardCharsets.UTF_8.name());
+    void autosave(String value, int retention) throws IOException {
+        if (retention != 3 && retention != 5 && retention != 10) throw new IllegalArgumentException("Unsupported retention");
+        String oldest = "auto-0";
+        for (int i = 0; i < retention; i++) {
+            String name = "auto-" + i;
+            if (!slot(name).exists()) { oldest = name; break; }
+            if (slot(name).lastModified() < slot(oldest).lastModified()) oldest = name;
         }
+        write(oldest, value);
+    }
+    List<String> autosaves() {
+        List<String> names = new ArrayList<>();
+        // Older slots remain available if the user lowers retention; never silently delete backups.
+        for (int i = 0; i < 10; i++) if (slot("auto-" + i).exists()) names.add("auto-" + i);
+        names.sort(Comparator.comparingLong((String name) -> slot(name).lastModified()).reversed());
+        return names;
     }
 }

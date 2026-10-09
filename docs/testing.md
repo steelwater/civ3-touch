@@ -1,5 +1,11 @@
 # Civ3Touch verification and CI
 
+## Milestone 7
+
+See [M7 baseline, controls, failure matrix and evidence](milestone-7.md). Run `bash scripts/test-saves.sh` (also in CI) for bounded save transport and failed-write preservation. On a dedicated disposable API-36 ARM64 emulator, run `bash scripts/test-android-saves.sh SERIAL`, `python3 scripts/android-qol-acceptance.py SERIAL`, `python3 scripts/android-qol-layout.py SERIAL`, `python3 scripts/android-qol-system-font.py SERIAL`, `python3 scripts/android-save-documents.py SERIAL`, and `python3 scripts/android-qol-save-failures.py SERIAL`. Build/push the existing Pinch helper below before layout testing; run the save-failure journey after layout because it restores the older manual playthrough. These use the existing JDK/SDK/adb stack, not new dependencies. The shell DEX tests real Android storage but is never packaged in the app. `QOL_LAYOUT_CASE=phone-landscape` or `QOL_LAYOUT_CASE=tablet` filters layout cases by prefix for focused reruns. After artwork import, `python3 scripts/android-qol-rendering.py SERIAL --imported` observes foreground/menu/background frame counts without screenshots; it is not an energy benchmark. The UI journey operates only on synthetic test slots; the layout journey requires its city-bearing recovery save, captures only synthetic artwork and restores display settings.
+
+Continue the core/legacy/resource tests, Android build/lint and affected import/touch journeys below. Emulator success does not establish physical-device energy use, stylus/controller accuracy, arbitrary document-provider durability or sudden-power-loss behavior. Exact passes, failures and unrun cases belong in the M7 evidence ledger.
+
 ## Milestone 6
 
 Run `python3 scripts/compatibility/test_inspect_header.py` for the isolated research probe; CI includes it without proprietary fixtures. See the [compatibility verification report](compatibility/verification.md) for exact bounds, local sample reproduction, current results and blocked original-save comparisons. Existing Rust replay/resource tests and Android build/lint remain the regression gates. The probe is host-only and does not load rules, scenarios or saves into gameplay.

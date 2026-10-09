@@ -27,19 +27,67 @@ final class GameMenus {
     void main() {
         GameState state = controller.state;
         if (state != null) {
+            if (activity.largeTextPhone()) add("New Game", activity::startNewGame);
             add("Choose unit", () -> new GameMenus(activity, controller).units());
             add("Cities and production", () -> new GameMenus(activity, controller).cities());
             add("Research", () -> new GameMenus(activity, controller).research());
             add("Diplomacy", () -> new GameMenus(activity, controller).diplomacy());
             add("Selected unit actions", () -> new GameMenus(activity, controller).unitScreen());
+            add("Quick Save", this::quickSave);
+            add("Quick Load", () -> load("quick", "Quick Load"));
             add("Save game", controller::saveGame);
+            add("Saves and backups", () -> new GameMenus(activity, controller).saves());
             add("Game settings", activity::gameSettings);
         }
         if (controller.assets != null || controller.prototype) {
             add("Load saved game", () -> controller.loadGame(false));
             add("Resume recovery save", () -> controller.loadGame(true));
         }
+        if (state == null) {
+            if (controller.assets != null || controller.prototype) add("Quick Load", () -> load("quick", "Quick Load"));
+            add("Saves and backups", () -> new GameMenus(activity, controller).saves());
+            add("Game settings", activity::gameSettings);
+        }
         show(state == null ? "Game" : state.name + " — actions");
+    }
+    private void confirm(String title, String details, Runnable action) {
+        TouchUi.screen(activity, title, details, java.util.Arrays.asList("Confirm", "Cancel"),
+                java.util.Arrays.asList(action, () -> {}));
+    }
+    private void load(String name, String title) {
+        controller.inspectSaves(() -> {
+            if (activity.isDestroyed()) return;
+            confirm(title, controller.slotDescriptions.get(name)
+                    + "\nLoad this slot? It replaces the live game after validation. Save current progress first.",
+                    () -> controller.loadSlot(name));
+        });
+    }
+    private void quickSave() {
+        controller.inspectSaves(() -> {
+            if (!activity.isDestroyed()) confirm("Quick Save", "Replace the quick slot? "
+                    + controller.slotDescriptions.get("quick"), controller::quickSave);
+        });
+    }
+    void saves() {
+        controller.inspectSaves(() -> {
+            if (!activity.isDestroyed()) new GameMenus(activity, controller).showSaves();
+        });
+    }
+    private void showSaves() {
+        if (controller.state != null) {
+            add("Quick Save", this::quickSave);
+            add("Export native save…", () -> activity.saveDocument(false));
+        }
+        if (controller.assets != null || controller.prototype) {
+            add("Import native save…", () -> confirm("Import native save", "Choose a Civ3Touch JSON save. A valid file replaces your live game and recovery slot. Manual and quick slots stay unchanged. Save current progress first. Original Civilization III .sav files are unsupported.",
+                    () -> activity.saveDocument(true)));
+            for (String name : new String[]{"quick", "manual", "recovery"})
+                add("Load " + name + " — " + controller.slotDescriptions.get(name), () -> load(name, "Load " + name));
+            for (String name : controller.autoSlots)
+                add("Load " + name + " — " + controller.slotDescriptions.get(name), () -> load(name, "Load " + name));
+        }
+        add("Autosave settings", activity::autosaveSettings);
+        show("Saves and backups", "Recovery records every completed action. Turn autosaves keep older checkpoints. Slots are private to this app and are lost on uninstall or clear-data. Export a native save for an external backup. No slot is loaded automatically.");
     }
     private void unitActions() {
         GameState state = controller.state;
@@ -173,8 +221,7 @@ final class GameMenus {
                     for (int j = 0; j < items.length(); j++) pending.add(productionName(id, items.get(j)));
                 }
             }
-            String details = city.getString("name") + " • population " + city.getInt("population")
-                    + "\nFood " + city.getInt("food_stockpile") + "/" + city.getInt("food_growth_threshold")
+            String details = "Food " + city.getInt("food_stockpile") + "/" + city.getInt("food_growth_threshold")
                     + " (gross " + city.getInt("food_per_turn") + "/turn)"
                     + "\nShields " + city.getInt("shield_stockpile") + "/" + city.getInt("production_cost")
                     + " (+" + city.getInt("shields_per_turn") + ") • commerce " + city.getInt("commerce_per_turn")
