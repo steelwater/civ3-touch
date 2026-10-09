@@ -1,5 +1,31 @@
 # Civ3Touch verification and CI
 
+## Milestone 4
+
+Run the existing Rust format/Clippy/tests, synthetic inventory, source policy, vendor hashes and Android build/lint gates. `bash scripts/test-touch.sh` uses only the existing JDK to test camera pan, focus-preserving pinch, zoom limits and map bounds, and is included in CI. No test framework or durable dependency is added.
+
+Build the shell-only two-pointer input helper using the installed SDK (it is not packaged in the app):
+
+```sh
+mkdir -p .local/m4-touch
+"$JAVA_HOME/bin/javac" -classpath "$ANDROID_HOME/platforms/android-36/android.jar" -d .local/m4-touch tests/touch/Pinch.java
+"$ANDROID_HOME/build-tools/35.0.0/d8" --lib "$ANDROID_HOME/platforms/android-36/android.jar" --output .local/m4-touch .local/m4-touch/Pinch.class
+adb -s YOUR_SERIAL push .local/m4-touch/classes.dex /data/local/tmp/civ3touch-pinch.dex
+python3 scripts/android-touch-acceptance.py YOUR_SERIAL
+python3 scripts/android-layout-acceptance.py YOUR_SERIAL
+python3 scripts/android-import-acceptance.py YOUR_SERIAL local-data/gog/app
+python3 scripts/android-loop-acceptance.py YOUR_SERIAL --imported
+python3 scripts/android-review-acceptance.py YOUR_SERIAL
+python3 scripts/android-acceptance.py YOUR_SERIAL --imported
+python3 scripts/android-smoke.py YOUR_SERIAL
+```
+
+The new touch harness uses real input events for drag, pinch, long press and ordinary controls; it asserts that navigation leaves the read-only engine snapshot/sequence unchanged. It also covers collapsible panels, city founding from the sheet, production/queue screens, empty diplomacy, rotation retention and the existing save/lifecycle journey. The imported loop verifies visible-opponent diplomacy at an actual encounter and checks the relocated audio toggle in both directions. The helper uses Android 36's shell input API; other runtime versions are not implied compatible. Default synthetic runs capture original Canvas-only screenshots under ignored `.local/m4-evidence`; imported runs never capture screenshots. Use a disposable emulator with an explicit, unshared serial/port; the journeys replace their corresponding manual/recovery save slots. Do not run another app’s input automation against that device concurrently.
+
+The layout harness loads the separate synthetic manual save created by the touch journey, captures phone/tablet/landscape and 1.5× text screens, checks Back and open-screen rotation, and restores display settings. Manual inspection must cover those images plus selection/movement after pan and zoom, system Back, stacked-unit/city context, diplomacy after encountering the opponent, and empty/error states. Full-screen menus return to the retained map on rotation. The Captain's post-review playtest and unrun-device limits remain explicit in [milestone-4.md](milestone-4.md).
+
+Google's current [testing/testing-setup skill](https://github.com/android/skills/blob/main/testing/testing-setup/SKILL.md) informs the existing-stack tests, UI journeys and configuration restoration checks. Its proposed DI/mocking/screenshot-framework installation is unnecessary for this task and conflicts with the handbook's dependency boundary. Play, R8, AGP migration and profiling are not applicable; no such changes are made.
+
 ## Milestone 3
 
 Run the existing Rust format/Clippy/tests, synthetic inventory, vendor hashes, source policy and Android build/lint gates below. New core tests exercise economy, production queues, research, all three Worker improvements, basic AI/combat, full replay state comparisons, future outcomes and damaged saves.

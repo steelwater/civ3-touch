@@ -22,8 +22,16 @@ def adb(*command):
 
 
 def tree():
-    adb('shell', 'uiautomator', 'dump', '/sdcard/civ3touch-window.xml')
-    return ET.fromstring(adb('shell', 'cat', '/sdcard/civ3touch-window.xml'))
+    for _ in range(4):
+        try:
+            result = adb('shell', 'uiautomator', 'dump', '/sdcard/civ3touch-window.xml')
+        except subprocess.CalledProcessError:
+            time.sleep(.25)
+            continue
+        if 'dumped to:' in result:
+            return ET.fromstring(adb('shell', 'cat', '/sdcard/civ3touch-window.xml'))
+        time.sleep(.25)
+    raise AssertionError('UI Automator did not produce a fresh hierarchy')
 
 
 def node(predicate):

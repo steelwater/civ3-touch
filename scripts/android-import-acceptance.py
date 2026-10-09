@@ -31,8 +31,16 @@ def adb(*command):
 
 
 def tree():
-    adb('shell', 'uiautomator', 'dump', '/sdcard/civ3touch-window.xml')
-    return ET.fromstring(adb('shell', 'cat', '/sdcard/civ3touch-window.xml'))
+    for _ in range(4):
+        try:
+            result = adb('shell', 'uiautomator', 'dump', '/sdcard/civ3touch-window.xml')
+        except subprocess.CalledProcessError:
+            time.sleep(.25)
+            continue
+        if 'dumped to:' in result:
+            return ET.fromstring(adb('shell', 'cat', '/sdcard/civ3touch-window.xml'))
+        time.sleep(.25)
+    raise AssertionError('UI Automator did not produce a fresh hierarchy')
 
 
 def node(predicate, scroll=False):
@@ -50,6 +58,7 @@ def tap(label):
     item = node(lambda n: n.get('text', '').lower() == label.lower() and (n.get('enabled') == 'true' or label == 'Documents'), scroll=label.startswith(prefix))
     left, top, right, bottom = map(int, re.findall(r'\d+', item.get('bounds')))
     adb('shell', 'input', 'tap', str((left + right) // 2), str((top + bottom) // 2))
+    time.sleep(.35)
 
 
 def launch():
@@ -59,6 +68,8 @@ def launch():
 
 
 def choose(variant):
+    if not any(n.get('text', '').lower() == 'import civilization iii complete' for n in tree().iter('node')):
+        tap('Actions'); tap('Game settings')
     tap('Import Civilization III Complete')
     tap('Documents')
     tap(prefix + '-' + variant)

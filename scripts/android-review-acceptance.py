@@ -15,10 +15,15 @@ spec.loader.exec_module(loop)
 
 
 def feedback_contains(messages):
-    # Read the actual Android status, not merely the native event payload.
+    # Expand the collapsible status before checking complete Android feedback.
+    info = next(n for n in loop.tree().iter('node')
+                if n.get('class') == 'android.widget.Button' and n.get('text', '').startswith('Turn '))
+    opened = info.get('text', '').endswith('▾')
+    if opened: loop.tap_bounds(loop.bounds(info))
     for _ in range(12):
         text = '\n'.join(n.get('text', '') for n in loop.tree().iter('node'))
         if all(message in text for message in messages):
+            if opened: loop.tap('Turn ' + str(loop.state()['view']['turn']), True)
             return
         time.sleep(.2)
     raise AssertionError(f'Missing completion feedback {messages!r}: {text}')
@@ -27,7 +32,7 @@ def feedback_contains(messages):
 loop.adb('shell', 'am', 'force-stop', loop.PACKAGE)
 loop.launch()
 loop.tap('Play' if loop.args.imported else 'New Game')
-time.sleep(1)
+loop.find('settler • Show actions')
 loop.unit_action('settler', 'Build City')
 loop.selected = None
 loop.city_production('warrior')
@@ -79,7 +84,7 @@ assert produced and researched and completed and overflow
 print('PASS: queued Worker retains positive overflow after auto-selected Warrior', flush=True)
 loop.save_and_reload()
 loop.tap('New Game')
-time.sleep(1)
+loop.find('settler • Show actions')
 assert loop.state()['view']['turn'] == 1
 loop.save_and_reload()
 print('PASS: New Game -> Save -> Load and continued play', flush=True)

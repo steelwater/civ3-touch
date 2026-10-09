@@ -24,6 +24,8 @@ final class GameController {
     Listener listener;
     GameState state;
     boolean busy, selected;
+    boolean informationExpanded, unitExpanded = true;
+    final MapCamera camera = new MapCamera();
     String error = "";
     private boolean closed;
     private long debugSequence;
@@ -147,7 +149,7 @@ final class GameController {
                     error = saveFeedback.isEmpty() ? successMessage : saveFeedback;
                     updateAudio();
                     if (moved) audio.step();
-                    if (resetSelection) selected = false;
+                    if (resetSelection) { selected = false; camera.initialized = false; }
                     busy = false;
                     notifyChanged();
                 });

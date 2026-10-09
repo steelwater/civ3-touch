@@ -16,4 +16,8 @@
     <string name="audio_on">Audio on</string>
     <string name="audio_off">Audio off</string>
     <string name="import_ready">GOG data imported. Tap Play. Five original terrain types and Settler idle/run are supported; other terrain and vegetation use prototype markers. Audio is optional. Tap Actions to resume a recovery save or load a saved game.</string>
+    <string name="information_title">Turn %1$d • %2$s %3$s</string>
+    <string name="unit_sheet_title">%1$s • %2$s actions</string>
+    <string name="economy">Gold %1$d (%2$+d/turn) • Science %3$d (%4$+d/turn)\nResearch: %5$s</string>
+    <string name="information_details">%1$s\n%2$s</string>
 </resources>

@@ -26,8 +26,16 @@ def adb(*parts):
 
 
 def tree():
-    adb('shell', 'uiautomator', 'dump', '/sdcard/civ3touch-loop-window.xml')
-    return ET.fromstring(adb('shell', 'cat', '/sdcard/civ3touch-loop-window.xml'))
+    for _ in range(4):
+        try:
+            result = adb('shell', 'uiautomator', 'dump', '/sdcard/civ3touch-loop-window.xml')
+        except subprocess.CalledProcessError:
+            time.sleep(.25)
+            continue
+        if 'dumped to:' in result:
+            return ET.fromstring(adb('shell', 'cat', '/sdcard/civ3touch-loop-window.xml'))
+        time.sleep(.25)
+    raise AssertionError('UI Automator did not produce a fresh hierarchy')
 
 
 def bounds(node):
@@ -36,15 +44,26 @@ def bounds(node):
 
 def tap_bounds(box):
     l, t, r, b = box
-    adb('shell', 'input', 'tap', str((l+r)//2), str((t+b)//2))
+    x, y = str((l+r)//2), str((t+b)//2)
+    # Let the inspected window settle before injecting input.
+    time.sleep(.5)
+    # Keep down/up separated like a finger tap, including on a loaded emulator.
+    adb('shell', 'input', 'swipe', x, y, x, y, '100')
+    # Let native window transitions settle before starting a new UI Automator connection.
+    time.sleep(.35)
 
 
 def find(label, prefix=False):
     for _ in range(12):
-        for n in tree().iter('node'):
+        hierarchy = tree()
+        for n in hierarchy.iter('node'):
             text = n.get('text', '')
             if (text.startswith(label) if prefix else text.lower() == label.lower()) and n.get('enabled') == 'true':
                 return n
+        scrolls = [n for n in hierarchy.iter('node') if n.get('scrollable') == 'true']
+        if scrolls:
+            l, t, r, b = bounds(scrolls[-1])
+            adb('shell', 'input', 'swipe', str((l+r)//2), str(b-30), str((l+r)//2), str(t+30), '350')
         time.sleep(.2)
     raise AssertionError('Missing UI control: ' + label)
 
@@ -69,7 +88,10 @@ def wait(before):
 
 
 def menu(label):
-    tap('Actions'); tap(label)
+    tap('Actions')
+    if label not in ['Choose unit', 'Cities and production', 'Research', 'Diplomacy', 'Game settings', 'Save game', 'Load saved game', 'Resume recovery save']:
+        tap('Selected unit actions')
+    tap(label)
 
 
 def choose(unit):
@@ -92,7 +114,8 @@ def move(u, destination):
     l,t,r,b = bounds(n)
     density = int(re.findall(r'density: (\d+)', adb('shell', 'wm', 'density'))[-1])/160
     dx = destination['x']-u['position']['x']; dy = destination['y']-u['position']['y']
-    x = (l+r)/2+(dx-dy)*48*density; y = (t+b)/2+(dx+dy)*28*density
+    zoom = float(re.search(r'zoom (\d+\.\d+)', n.get('content-desc')).group(1))
+    x = (l+r)/2+(dx-dy)*48*density*zoom; y = (t+b)/2+(dx+dy)*28*density*zoom
     assert l <= x < r and t <= y < b
     adb('shell', 'input', 'tap', str(round(x)), str(round(y)))
     return wait(current['_sequence'])
@@ -119,7 +142,7 @@ def city_production(option, queue=False):
 
 def save_and_reload():
     before = state(); menu('Save game'); saved = wait(before['_sequence'])
-    find('Game saved.')
+    find('Game saved.', True)
     # A later live turn must not overwrite the separate manual slot.
     expected_next = end()
     adb('shell', 'input', 'keyevent', 'KEYCODE_HOME')
@@ -131,7 +154,7 @@ def save_and_reload():
         if current['view'] == saved['view']: break
         time.sleep(.2)
     else: raise AssertionError('Manual save did not restore the complete view')
-    find('Saved game loaded.')
+    find('Saved game loaded.', True)
     assert current['queues'] == saved['queues']
     global selected
     selected = None
@@ -143,7 +166,7 @@ def save_and_reload():
     assert state()['view'] == continued['view']
     adb('shell', 'am', 'force-stop', PACKAGE)
     launch()
-    menu('Resume recovery save'); find('Saved game loaded.')
+    menu('Resume recovery save'); find('Saved game loaded.', True)
     assert state()['view'] == continued['view']
     selected = None
     end()
@@ -154,12 +177,33 @@ def launch():
     adb('shell', 'am', 'start', '-W', '-n', PACKAGE + '/.MainActivity', '--ez', 'synthetic', str(not args.imported).lower())
 
 
+def check_audio_settings():
+    before = state()
+    menu('Game settings')
+    label = next(n.get('text') for n in tree().iter('node') if n.get('text') in ['Audio on', 'Audio off'])
+    tap(label)
+    menu('Game settings')
+    tap('Audio off' if label == 'Audio on' else 'Audio on')
+    assert state() == before
+    print('PASS: in-game audio toggle is reachable and preserves simulation state', flush=True)
+
+
+def check_known_diplomacy(before):
+    owners = sorted({u['owner'] for u in before['view']['known_units'] + before['view']['known_cities'] if u['owner'] != before['view']['player']})
+    assert owners, 'An attack target must be present in the known player view'
+    menu('Diplomacy')
+    find('Other civilizations in your known map information: ' + str(owners), True)
+    tap('Return to map'); assert state() == before
+    print('PASS: diplomacy shows only opponents in the known player view', flush=True)
+
+
 def explore_or_attack():
     current = state()
     warriors = [u for u in current['view']['known_units'] if u['owner'] == 0 and u['attack'] > 0 and u['movement'] > 0]
     for u in warriors:
         attack = next((a['Attack'] for a in current['available'] if isinstance(a, dict) and 'Attack' in a and a['Attack']['unit_id'] == u['id']), None)
         if attack:
+            check_known_diplomacy(current)
             choose(u); before = state()['_sequence']; menu('Attack enemy ' + str(attack['targets'][0]['index']))
             after = wait(before)
             if any('CombatResolved' in e for e in after['result']['events']): return True
@@ -192,7 +236,7 @@ def main():
     global selected
     adb('shell', 'am', 'force-stop', PACKAGE); launch()
     tap('Play' if args.imported else 'New Game')
-    time.sleep(1)
+    find('settler • Show actions')
     initial = state(); selected = None
     settler = unit('settler')
     destination = next(m['destinations'][0] for m in initial['moves'] if m['unit_id'] == settler['id'])
@@ -222,6 +266,7 @@ def main():
     assert len(state()['view']['visible_tiles']) > explored_before
     print('PASS: movement costs, city, production queue, research, Worker road, fog, AI encounter and combat', flush=True)
     save_and_reload()
+    if args.imported: check_audio_settings()
 
 
 if __name__ == '__main__': main()

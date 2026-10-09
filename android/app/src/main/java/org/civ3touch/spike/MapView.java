@@ -10,6 +10,8 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.view.MotionEvent;
+import android.view.GestureDetector;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 
 /** Presentation only: decoded imported art over the native player view. */
@@ -17,27 +19,64 @@ final class MapView extends View {
     interface TileTap { void tap(int x, int y); }
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path diamond = new Path();
-    private final float halfWidth, halfHeight;
+    private float halfWidth, halfHeight;
+    private final float density;
+    private final MapCamera camera;
+    private final GestureDetector gestures;
+    private final ScaleGestureDetector scaling;
+    private boolean multiTouch, tapped;
+    private TileTap onLongPress;
     private TileTap onTap;
     private GameState state;
     private boolean selected;
-    private float downX, downY;
     private ImportedAssets assets;
     private long moveStarted;
     private int moveDx, moveDy;
     private final Rect source = new Rect();
     private final RectF destination = new RectF();
 
-    public MapView(Context context) {
+    public MapView(Context context) { this(context, new MapCamera()); }
+
+    public MapView(Context context, MapCamera camera) {
         super(context);
-        float density = getResources().getDisplayMetrics().density;
-        halfWidth = 48 * density;
-        halfHeight = 28 * density;
+        this.camera = camera;
+        density = getResources().getDisplayMetrics().density;
+        gestures = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
+            @Override public boolean onDown(MotionEvent e) { return true; }
+            @Override public boolean onScroll(MotionEvent first, MotionEvent current, float dx, float dy) {
+                if (!multiTouch && state != null) {
+                    camera.pan(-dx, -dy, halfWidth, halfHeight, state.width, state.height);
+                    describeViewport(); invalidate();
+                }
+                return true;
+            }
+            @Override public boolean onSingleTapUp(MotionEvent e) {
+                if (!multiTouch) tapped = true;
+                return true;
+            }
+            @Override public void onLongPress(MotionEvent e) {
+                if (!multiTouch) dispatchTile(e, onLongPress);
+            }
+        });
+        scaling = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override public boolean onScale(ScaleGestureDetector detector) {
+                camera.scale(detector.getScaleFactor(), detector.getFocusX() - getWidth() / 2f,
+                        detector.getFocusY() - getHeight() / 2f, halfWidth, halfHeight, state.width, state.height);
+                updateScale(); describeViewport(); invalidate(); return true;
+            }
+        });
+        scaling.setQuickScaleEnabled(false);
+        updateScale();
         setClickable(true);
         setFocusable(true);
         setContentDescription("Generated map. Start a new game.");
     }
 
+    void setOnTileLongPress(TileTap callback) { onLongPress = callback; }
+    private void updateScale() { halfWidth = 48 * density * camera.zoom; halfHeight = 28 * density * camera.zoom; }
+    void centerSelection() {
+        if (state != null) { camera.center(state.x, state.y); describeViewport(); invalidate(); }
+    }
     void setOnTileTap(TileTap onTap) { this.onTap = onTap; }
 
     void display(GameState next, boolean isSelected, ImportedAssets imported) {
@@ -48,17 +87,26 @@ final class MapView extends View {
         } else if (next == null || state == null || (next != state && !next.unitMoved)) {
             moveStarted = 0;
         }
+        if (next != null && (!camera.initialized || (state != null && (state.index != next.index
+                || state.generation != next.generation || state.x != next.x || state.y != next.y)))) {
+            camera.center(next.x, next.y);
+        }
         assets = imported;
         state = next;
         selected = isSelected;
-        if (state == null) setContentDescription("Generated map. Start a new game.");
-        else setContentDescription("Generated map. " + state.name + " at " + state.x + ", " + state.y
-                + (selected ? ". Selected." : ". Tap a unit to select; Actions lists stacked units."));
+        describeViewport();
         invalidate();
     }
 
-    private float screenX(int x, int y) { return getWidth() / 2f + ((x - state.x) - (y - state.y)) * halfWidth; }
-    private float screenY(int x, int y) { return getHeight() / 2f + ((x - state.x) + (y - state.y)) * halfHeight; }
+    private void describeViewport() {
+        if (state == null) setContentDescription("Generated map. Start a new game.");
+        else setContentDescription("Generated map. " + state.name + " at " + state.x + ", " + state.y
+                + (selected ? ". Selected." : ". Tap a unit to select; Actions lists stacked units.")
+                + String.format(java.util.Locale.ROOT, " View center %.2f, %.2f; zoom %.2f. Drag to pan; pinch to scale; long press to inspect.", camera.x, camera.y, camera.zoom));
+    }
+
+    private float screenX(int x, int y) { return getWidth() / 2f + ((x - camera.x) - (y - camera.y)) * halfWidth; }
+    private float screenY(int x, int y) { return getHeight() / 2f + ((x - camera.x) + (y - camera.y)) * halfHeight; }
 
     private void tile(Canvas canvas, int x, int y, int color, boolean stroke) {
         float cx = screenX(x, y), cy = screenY(x, y);
@@ -174,21 +222,22 @@ final class MapView extends View {
 
     @Override public boolean onTouchEvent(MotionEvent event) {
         if (!isEnabled() || state == null) return false;
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            downX = event.getX(); downY = event.getY();
-            return true;
-        }
-        if (event.getAction() == MotionEvent.ACTION_UP) {
-            if (Math.hypot(event.getX() - downX, event.getY() - downY) > halfHeight / 2) return true;
-            performClick();
-            float dx = (event.getX() - getWidth() / 2f) / halfWidth;
-            float dy = (event.getY() - getHeight() / 2f) / halfHeight;
-            int x = Math.round(state.x + (dx + dy) / 2f);
-            int y = Math.round(state.y + (dy - dx) / 2f);
-            if (x >= 0 && y >= 0 && x < state.width && y < state.height) onTap.tap(x, y);
-            return true;
-        }
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) multiTouch = false;
+        if (event.getPointerCount() > 1) multiTouch = true;
+        tapped = false;
+        scaling.onTouchEvent(event);
+        gestures.onTouchEvent(event);
+        if (tapped) { performClick(); dispatchTile(event, onTap); }
         return true;
+    }
+
+    private void dispatchTile(MotionEvent event, TileTap callback) {
+        if (!isEnabled() || state == null || callback == null) return;
+        float dx = (event.getX() - getWidth() / 2f) / halfWidth;
+        float dy = (event.getY() - getHeight() / 2f) / halfHeight;
+        int x = Math.round(camera.x + (dx + dy) / 2f);
+        int y = Math.round(camera.y + (dy - dx) / 2f);
+        if (x >= 0 && y >= 0 && x < state.width && y < state.height) callback.tap(x, y);
     }
     @Override public boolean performClick() { super.performClick(); return true; }
 
