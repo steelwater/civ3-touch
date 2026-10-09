@@ -9,6 +9,7 @@ pub mod id;
 pub mod mapgen;
 pub mod pathfinding;
 pub mod protocol;
+pub mod resource;
 pub mod scripting;
 pub mod tech;
 pub mod tile;

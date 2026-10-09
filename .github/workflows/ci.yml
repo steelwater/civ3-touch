@@ -30,7 +30,7 @@ jobs:
           sudo apt-get install -y liblua5.4-dev pkg-config
           sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'ndk;27.2.12479018'
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
-      - name: Test unchanged upstream baseline
+      - name: Test FreeC3 core and recorded resource patches
         working-directory: vendor/freec3
         run: cargo test --locked -p fc3_core -p fc3_pcx -p fc3_flic -p fc3_headless
       - name: Verify Civ3Touch
@@ -42,6 +42,7 @@ jobs:
           python3 scripts/test_inventory.py
           python3 scripts/check-source-policy.py
           python3 scripts/verify-upstream.py
+          python3 scripts/test_vendor_policy.py
       - name: Compile and lint Android
         run: android/gradlew -p android --no-daemon assembleDebug lintDebug
       - name: Package APK, corresponding source and checksums

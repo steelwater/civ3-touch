@@ -125,7 +125,8 @@ final class GameMenus {
             String details = "Unexplored tile";
             for (GameState.Tile tile : state.tiles) if (tile.x == x && tile.y == y)
                 details = tile.terrain + " • " + tile.vegetation + "\n" + tile.visibility
-                        + (tile.road > 0 ? " • Road" : "") + " " + tile.improvement;
+                        + (tile.road > 0 ? " • Road" : "") + " " + tile.improvement
+                        + (tile.resource.isEmpty() ? "" : "\nResource: " + tile.resource);
             show("Tile " + x + ", " + y, details);
         } catch (JSONException failure) { fail(failure); }
     }

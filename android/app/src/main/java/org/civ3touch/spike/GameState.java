@@ -10,7 +10,7 @@ import java.util.List;
 final class GameState {
     static final class Tile {
         final int x, y;
-        final String terrain, vegetation, visibility, improvement;
+        final String terrain, vegetation, visibility, improvement, resource;
         final int road;
         Tile(JSONObject tile) throws JSONException {
             JSONObject coord = tile.getJSONObject("coord");
@@ -18,6 +18,7 @@ final class GameState {
             terrain = tile.getString("terrain");
             vegetation = tile.getString("vegetation");
             visibility = tile.getString("visibility");
+            resource = tile.optString("resource", "");
             road = tile.getInt("road_level");
             improvement = tile.isNull("improvement") ? "" : tile.getInt("improvement") == 1 ? "Mine" : "Irrigation";
         }

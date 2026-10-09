@@ -1,0 +1,41 @@
+{
+  "baseline_revision": "90fc7eeda2d1914c9306b33a161686fa839b8455",
+  "authorization": "Dan, 2026-10-09: narrow Milestone 5 resource-foundation patches; preserve legacy rules without duplicate engines.",
+  "files": {
+    "crates/fc3_core/src/resource.rs": {
+      "original_sha256": null,
+      "sha256": "b08bd0d7b741e56d3dfe7533779222a712f723781035f1f58be54cf36460962d",
+      "reason": "Stable resource definitions, reveal predicate and independent seeded prototype placement."
+    },
+    "crates/fc3_core/src/lib.rs": {
+      "original_sha256": "5f32c8f6895449ce6632510c1b784358ae302572328c3e9617059ab216320603",
+      "sha256": "ce4e5da1d80216f3925ab662ee937e7dac1e2b353a0c42c2a2bf994ed2d6934d",
+      "reason": "Export shared resource module."
+    },
+    "crates/fc3_core/src/world.rs": {
+      "original_sha256": "b4d1f719814a6a0750daba01efa25b425292c0bda934e023aff30bb0264cba8d",
+      "sha256": "f3aec387412c174a472ef62bd8dae424cbbf57bdf917b71b06e46bc8e1da04cf",
+      "reason": "Optional resource mode and player-filtered resource views; legacy serialization unchanged."
+    },
+    "crates/fc3_core/src/protocol.rs": {
+      "original_sha256": "9e2c7b6933638a12eeb89ba191460beb06ba62830f3421456a05599ec3dec417",
+      "sha256": "38d1e46e6b9c076c68be052e049b7cbeda0384824d79a265eb6e4411a49b503b",
+      "reason": "Optional resource label on tile views."
+    },
+    "crates/fc3_core/src/engine/mod.rs": {
+      "original_sha256": "3426461dd8fe51f87edaaddb805af91a94512a886c0fe9aa98ff7fa3d8b8ab99",
+      "sha256": "e3ad400c536b86cf54a70d394d2ff32cfb55baeb1944f406ff74b527d0f033bc",
+      "reason": "Explicit opt-in construction, resource-aware engine log replay, and yield refresh after research."
+    },
+    "crates/fc3_core/src/engine/city.rs": {
+      "original_sha256": "a849a742436a92bb979b06fc7e1575aee811fdc7a068e071f0aa0d128b1e14f4",
+      "sha256": "070d9e2b046e19dcf0bf44791d35520ac54aa0f8c0838cb2f1f0e9791e1d7b92",
+      "reason": "Add revealed-resource bonuses to non-center worked tiles and queries."
+    },
+    "crates/fc3_headless/src/display.rs": {
+      "original_sha256": "e15f77f67b153848626bfc3e1b5ef7bc7b79eaff00b8f603620029c0ee958216",
+      "sha256": "02e5c8044895f76bc2d4631d3c5a11eabdab95d0c8fc82b5d9f2cec77d8a7f10",
+      "reason": "Adapt synthetic display-test tile literal to optional view field."
+    }
+  }
+}

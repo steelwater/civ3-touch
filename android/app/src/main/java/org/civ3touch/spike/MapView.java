@@ -148,6 +148,12 @@ final class MapView extends View {
             }
             if (!"Visible".equals(visible.visibility)) tile(canvas, visible.x, visible.y, 0x77000000, false);
             tile(canvas, visible.x, visible.y, 0xff263b35, true);
+            if (!visible.resource.isEmpty()) {
+                paint.setColor(0xffffe8a3); paint.setTextAlign(Paint.Align.CENTER);
+                paint.setTextSize(halfHeight * .36f);
+                canvas.drawText(visible.resource, screenX(visible.x, visible.y),
+                        screenY(visible.x, visible.y) - halfHeight * .3f, paint);
+            }
             if (!"None".equals(visible.vegetation)) {
                 paint.setColor(0xff183e27);
                 paint.setTextAlign(Paint.Align.CENTER);

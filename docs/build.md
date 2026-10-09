@@ -14,9 +14,9 @@ A local Rust installation may use `CARGO_HOME="$PWD/.local/cargo"` and `RUSTUP_H
 
 On this workstation, the SDK is under `$HOME/Library/Android/sdk`, the project-local NDK is `.local/android-sdk/ndk/27.2.12479018`, and Java is `/Applications/Android Studio.app/Contents/jbr/Contents/Home`. On other machines, set the three environment variables to the actual installed paths. No machine path is built into the source.
 
-## Unmodified FreeC3 baseline
+## FreeC3 baseline and approved resource patches
 
-The full source snapshot is already present: revision `90fc7eeda2d1914c9306b33a161686fa839b8455`. Verify it with `python3 scripts/verify-upstream.py`.
+The full source snapshot is already present: revision `90fc7eeda2d1914c9306b33a161686fa839b8455`, plus the approved M5 resource patches. Verify original-file provenance and exact patched content with `python3 scripts/verify-upstream.py`; see [patch policy](milestone-5-resources.md). The upstream test command below tests the current patched source.
 
 The baseline's mlua configuration expects external Lua 5.4. Either use the platform's development package (`liblua5.4-dev` plus pkg-config on Ubuntu), or build a local copy:
 
