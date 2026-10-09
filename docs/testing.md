@@ -1,5 +1,9 @@
 # Civ3Touch verification and CI
 
+## Milestone 6
+
+Run `python3 scripts/compatibility/test_inspect_header.py` for the isolated research probe; CI includes it without proprietary fixtures. See the [compatibility verification report](compatibility/verification.md) for exact bounds, local sample reproduction, current results and blocked original-save comparisons. Existing Rust replay/resource tests and Android build/lint remain the regression gates. The probe is host-only and does not load rules, scenarios or saves into gameplay.
+
 ## Milestone 5
 
 Begin with the [compatibility audit and matrix](milestone-5.md), [reference/fixture verification guide](milestone-5-verification.md) and approved [resource patch/save policy](milestone-5-resources.md). Existing green tests establish prototype health, not original-game parity. `cargo test --locked --test resource_foundation` covers the resource slice and frozen legacy saves; the workspace test command includes it. `python3 scripts/verify-upstream.py` now verifies the unchanged baseline plus the explicit resource patch manifest. Preserve the Android import, touch, loop and lifecycle journeys below.

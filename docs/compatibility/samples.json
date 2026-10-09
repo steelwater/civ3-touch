@@ -1,0 +1,50 @@
+[
+  {
+    "path": "civ3mod.bic",
+    "bytes": 17368,
+    "sha256": "3f4098e005723bf0a9246f90f73a6018f69d638378b2666fa605fd30eca8b9c4",
+    "decoded_bytes": 111308,
+    "decoded_sha256": "edf9b1625b62880a2513c69fb15ae70bf7b313d95406b721e4b334630bf2d561",
+    "signature": "BIC ",
+    "version": [
+      4,
+      1
+    ]
+  },
+  {
+    "path": "civ3PTW/civ3X.bix",
+    "bytes": 22522,
+    "sha256": "6bfbac6df33b0feeb7a36fc701995f31035c27d965d1974debf6e4162d26f47e",
+    "decoded_bytes": 154972,
+    "decoded_sha256": "0cd42cbd79ad1f1a07e196cb6dcb8472ff40fe356bc506a99c740bcb1dc80d85",
+    "signature": "BICX",
+    "version": [
+      11,
+      18
+    ]
+  },
+  {
+    "path": "__support/save/Conquests/conquests.biq",
+    "bytes": 30501,
+    "sha256": "1bd610ab1420217f7d64a9214b60c0bc7686e4781a0d6e66590171535495609c",
+    "decoded_bytes": 209222,
+    "decoded_sha256": "692656db2d0472abacf6f69bc4dde59f2fda63fdc807875f9277d0b59e517eee",
+    "signature": "BICX",
+    "version": [
+      12,
+      8
+    ]
+  },
+  {
+    "path": "Conquests/Conquests/1 Mesopotamia.biq",
+    "bytes": 27873,
+    "sha256": "fb65288ebb3a8927f86105e4b28c1aa97618239a932d1995a8de2535f56826a8",
+    "decoded_bytes": 272612,
+    "decoded_sha256": "28548ecc81df361055841f3f72645e3c661d4bfda7aa5bee93f0edab0abdf5aa",
+    "signature": "BICX",
+    "version": [
+      12,
+      7
+    ]
+  }
+]

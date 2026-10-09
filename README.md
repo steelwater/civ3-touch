@@ -1,6 +1,6 @@
 # Civ3Touch
 
-An independent, open-source investigation of an Android client built around the FreeC3 simulation engine, using user-supplied GOG Civilization III Complete data. **The canonical roadmap marks Milestones 1–4 complete. Milestone 5 begins with a [rules-compatibility audit](docs/milestone-5.md); the existing playable prototype does not yet implement complete Conquests rules.**
+An independent, open-source investigation of an Android client built around the FreeC3 simulation engine, using user-supplied GOG Civilization III Complete data. **The Milestone 6 brief records Milestones 1–5 as owner-accepted, with M5 limited to its resource foundation. [Milestone 6 compatibility research](docs/compatibility/README.md) is in progress; original saves, scenarios and complete Conquests rules remain unsupported.**
 
 Civ3Touch is not affiliated with or endorsed by Firaxis, 2K, GOG, FreeC3, or OpenCiv3/C7. Civilization III and related trademarks belong to their owners. No proprietary game data is included. Civ3Touch additions use GPL-3.0-only; see [LICENSE](LICENSE), [upstream attribution](UPSTREAM.md), and [licensing decision](docs/licensing.md).
 
@@ -36,7 +36,7 @@ Five original base terrain types and the selected Settler's idle/run animations 
 - `docs/`: [build instructions](docs/build.md), [architecture/integration](docs/android-integration.md), [GOG inventory](docs/gog-data.md), [test/CI evidence](docs/testing.md), and [milestone audit](docs/milestone-0-audit.md).
 - `installer/`, `local-data/`, `.local/`, and build output: ignored local inputs and tools. See [asset policy](docs/asset-policy.md).
 
-Canonical scope: [Milestone 5 Crew Brief](https://docs.google.com/document/d/1vaHIo3TjDDqFBKw63hY0qtk8eRRrtJJRnE0aSJERGsA/edit) and [roadmap](https://docs.google.com/document/d/149SobRRG_ZL3qq4fXuJ5KZG0R_l9vmf3NOmQ8W1TWlE/edit). The [audit and compatibility matrix](docs/milestone-5.md) distinguish existing code from verified original-game behavior. Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
+Canonical scope: [Milestone 6 Crew Brief](https://docs.google.com/document/d/182_1nacqFU2GKN-ufsVv-alTY72daWejMzMqFpZnR7A/edit) and [roadmap](https://docs.google.com/document/d/149SobRRG_ZL3qq4fXuJ5KZG0R_l9vmf3NOmQ8W1TWlE/edit). The [M6 report and field mappings](docs/compatibility/README.md) cover read-only format research; the [M5 rules audit](docs/milestone-5.md) retains open gameplay-parity gaps. Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 The [first resource slice](docs/milestone-5-resources.md) adds Wheat, Cattle, Gold and Horses to new prototype games, with worked-tile bonuses and technology-filtered resource labels. Long press a tile to inspect it. Existing M3-v2/M4 saves retain their original rules; new M5 saves require an M5-capable build. This remains partial resource support, without trade networks or luxury happiness.
 
